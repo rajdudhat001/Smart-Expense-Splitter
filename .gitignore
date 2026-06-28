@@ -1,0 +1,17 @@
+# Django ignore
+backend/venv/
+backend/db.sqlite3
+backend/__pycache__/
+backend/*.pyc
+backend/.env
+
+# Node/React ignore
+node_modules/
+.dist/
+dist/
+
+# OS/Editor ignore
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
