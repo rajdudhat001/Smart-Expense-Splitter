@@ -400,4 +400,144 @@ In Django, database tables are not modified directly. We write Python models, an
    * **Answer**: A `ForeignKey` represents a one-to-many relationship (one row links to one parent). A `ManyToManyField` represents a many-to-many relationship, which requires a third table (join table) to map multiple relationships between both tables.
    * **Hindi Answer**: `ForeignKey` एक-से-अनेक (one-to-many) संबंध दर्शाता है। `ManyToManyField` अनेक-से-अनेक संबंध दर्शाता है, जिसके लिए दोनों तालिकाओं के बीच संबंधों को मैप करने के लिए एक तीसरी तालिका (join table) की आवश्यकता होती है।
 
+---
+---
+
+# PHASE 4: User Authentication (फेज 4: यूज़र ऑथेंटिकेशन)
+
+## 1. Core Concepts (मूल सिद्धांत)
+
+### What is User Authentication? (यूज़र ऑथेंटिकेशन क्या है?)
+* **English**: User authentication verifies the identity of a person logging in. Django's built-in authentication system (`django.contrib.auth`) manages user registrations, database queries, and secures browser sessions automatically.
+* **Hindi**: यूज़र ऑथेंटिकेशन वह प्रक्रिया है जिससे हम यूजर की पहचान की पुष्टि करते हैं। Django का इन-बिल्ट ऑथेंटिकेशन सिस्टम यूजर रजिस्ट्रेशन, डेटाबेस पासवर्ड वेरिफिकेशन और ब्राउज़र सेशन को सुरक्षित रूप से हैंडल करता है।
+
+### CSRF Protection (CSRF प्रोटेक्शन)
+* **English**: CSRF (Cross-Site Request Forgery) is a security vulnerability where malicious websites trick authenticated users into submitting unwanted commands. Django blocks this by attaching a unique cryptographic token (`{% csrf_token %}`) to forms, ensuring requests originate only from our application.
+* **Hindi**: CSRF (क्रॉस-साइट रिक्वेस्ट फोर्जरी) एक सुरक्षा खतरा है जहाँ कोई बाहरी वेबसाइट किसी लॉगिन यूज़र के नाम पर गलत कमांड भेज सकती है। Django हर फॉर्म में `{% csrf_token %}` जोड़कर इससे सुरक्षा प्रदान करता है।
+
+### Django Forms & Validation (जैंगो फॉर्म्स और वैलिडेशन)
+* **English**: Django Forms is a class-based component that renders HTML input forms, validates submitted data (type checking, length, custom checks), and yields human-friendly error messages if validation fails.
+* **Hindi**: Django Forms एक घटक है जो स्वचालित रूप से HTML इनपुट बॉक्स बनाता है, इनपुट डेटा को चेक करता है (जैसे ईमेल फॉर्मेट, पासवर्ड का मिलना) और गलत होने पर त्रुटियों के संदेश दिखाता है।
+
+---
+
+## 2. Created & Modified Files Explanation (बनाई और बदली गई फ़ाइलों का विवरण)
+
+### A. `expenses/forms.py` [NEW] (रजिस्ट्रेशन और लॉगिन फॉर्म्स)
+* **English**: Defines `UserRegistrationForm` (model-linked for signing up new users) and `UserLoginForm` (standard form for credentials validation).
+* **Hindi**: यह फ़ाइल यूज़र रजिस्ट्रेशन और लॉगिन के लिए फॉर्म्स डिफाइन करती है।
+
+#### Important Code Explanation (महत्वपूर्ण कोड का स्पष्टीकरण):
+* `class UserRegistrationForm(forms.ModelForm):`
+  * **English**: Inherits from `ModelForm` and binds directly to the built-in `User` model, specifying fields like `username` and `email`.
+  * **Hindi**: यह फॉर्म सीधे जैंगो के इन-बिल्ट `User` मॉडल के ऊपर आधारित है, जिससे हमें `username` और `email` इनपुट मिलते हैं।
+* `password = forms.CharField(widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Enter Password'}), help_text="Required. Use a strong password.")`
+  * **English**: Creates a password text input widget that masks the text characters.
+  * **Hindi**: यह इनपुट फ़ील्ड पासवर्ड छुपाने (PasswordInput widget) के लिए है।
+* `def clean_email(self):`
+  * **English**: Validates that the submitted email is unique. If a user with this email already exists, it raises a `ValidationError`.
+  * **Hindi**: यह चेक करता है कि यह ईमेल पहले से ही रजिस्टर्ड है या नहीं। यदि है, तो एरर संदेश देता है।
+* `def clean(self):`
+  * **English**: A form-level cleaner that fetches both password values and checks if they match. If they don't, it appends an error to the `confirm_password` field.
+  * **Hindi**: यह फ़ंक्शन चेक करता है कि पासवर्ड और कन्फर्म पासवर्ड दोनों एक जैसे हैं या नहीं।
+* `def save(self, commit=True):`
+  * **English**: Overrides saving behaviour to call `user.set_password(self.cleaned_data["password"])` which hashes the password securely before executing SQL inserts.
+  * **Hindi**: यह सेव करने से पहले सादे पासवर्ड को सुरक्षित रूप से एनक्रिप्ट (हैश) करने का काम करता है।
+
+---
+
+### B. `expenses/views.py` [MODIFY] (ऑथेंटिकेशन व्यूज़)
+* **English**: Houses the authentication controller views. It runs forms processing, validates user input, handles redirects, and initializes session records.
+* **Hindi**: इसमें रजिस्ट्रेशन, लॉगिन और लॉगआउट की मुख्य लॉजिक लिखी गई है।
+
+#### Important Code Explanation (महत्वपूर्ण कोड का स्पष्टीकरण):
+* `if request.user.is_authenticated:`
+  * **English**: Checks if the request sender is already logged in. If true, redirects them directly to the dashboard to avoid showing login forms again.
+  * **Hindi**: यह जांचता है कि यूजर पहले से लॉगिन तो नहीं है। यदि है, तो उसे सीधे डैशबोर्ड पर भेज देता है।
+* `user = authenticate(request, username=username, password=password)`
+  * **English**: Verifies the username and password against the database records. If they are correct, it returns the `User` instance; else, it returns `None`.
+  * **Hindi**: यह यूजरनेम और पासवर्ड की जांच डेटाबेस से करता है। सही होने पर यूजर ऑब्जेक्ट लौटाता है, नहीं तो `None` देता है।
+* `login(request, user)`
+  * **English**: Saves the authenticated user's ID into Django's session backend, establishing a cookie in the browser.
+  * **Hindi**: यह यूजर का लॉग-इन सेशन शुरू करता है और कुकी सेट करता है।
+* `logout(request)`
+  * **English**: Flushes the session data from the server and browser cookie store, logging the user out.
+  * **Hindi**: यह सेशन कुकी को मिटा देता है और यूजर को लॉगआउट कर देता है।
+* `@login_required(login_url='login')`
+  * **English**: Decorator that protects views. If an unauthenticated user visits `/`, they are redirected to the login view with a `next` query parameter.
+  * **Hindi**: यह एक डेकोरेटर है जो बिना लॉगिन किए डैशबोर्ड देखने से रोकता है और लॉगिन पेज पर रीडायरेक्ट करता है।
+
+---
+
+### C. `expenses/urls.py` & `config/urls.py` [MODIFY] (राउटिंग कॉन्फ़िगरेशन)
+* **English**: Configures the main page routes pointing login, register, logout, and dashboard views to root URLs `/login/`, `/register/`, `/logout/`, and `/`.
+* **Hindi**: यह राउटिंग कॉन्फ़िगरेशन को अपडेट करता है ताकि यूज़र मुख्य पेजों (लॉगिन, साइनअप, डैशबोर्ड) को सही URL से एक्सेस कर सके।
+
+---
+
+### D. HTML Templates (एचटीएमएल टेम्पलेट्स)
+* **`base.html`**:
+  * **English**: Parent layout providing standard HTML header structure and custom beautiful modern dark theme styling with glowing elements and interactive navbar.
+  * **Hindi**: यह पैरेंट टेम्पलेट है जो पूरे ऐप में एक समान रूप से आधुनिक डार्क-थीम और नेविगेशन बार दिखाता है।
+* **`register.html`**:
+  * **English**: Registration form rendering text inputs, displaying form field errors, and enforcing CSRF protection.
+  * **Hindi**: रजिस्ट्रेशन फॉर्म जो यूजर इनपुट फ़ील्ड, फॉर्म त्रुटियों और CSRF सुरक्षा को रेंडर करता है।
+* **`login.html`**:
+  * **English**: Form for logging in, showing authentication invalidity alerts, and utilizing a safe POST submission protocol.
+  * **Hindi**: लॉगिन करने के लिए फॉर्म जिसमें एरर मैसेज और सुरक्षित POST प्रोटोकॉल शामिल है।
+* **`dashboard.html`**:
+  * **English**: User profile landing dashboard, showing session details and dynamic logout trigger options.
+  * **Hindi**: लॉगिन होने के बाद प्रोफाइल डैशबोर्ड जो यूजर की डिटेल्स दिखाता है।
+
+---
+
+## 3. Steps Performed & Commands Used (किए गए कदम और उपयोग किए गए कमांड्स)
+
+1. **Created Forms**: Created `expenses/forms.py` utilizing the Forms API.
+2. **Created Views**: Designed registration, login, logout, and dashboard views in `expenses/views.py`.
+3. **Updated Routes**: Set up routing mappings in `expenses/urls.py` and included it in the root `config/urls.py`.
+4. **Designed Front-end templates**: Built custom glassmorphic HTML files in `expenses/templates/expenses/`.
+5. **Ran Unit Tests**: Verify correctness using the test command:
+   ```powershell
+   .\venv\Scripts\python.exe manage.py test
+   ```
+
+---
+
+## 4. Best Practices & Common Mistakes (बेस्ट प्रैक्टिसेज और आम गलतियां)
+
+* **Best Practice**: Always hash passwords using Django's built-in `set_password` method. Raw passwords saved in databases are high-security risks.
+* **Best Practice (Hindi)**: डेटाबेस में कभी भी पासवर्ड को प्लेन टेक्स्ट में स्टोर न करें, हमेशा `set_password` का उपयोग करके हैश करें।
+* **Best Practice**: Protect all form actions with `{% csrf_token %}` to secure state-altering actions from cross-site scripts.
+* **Best Practice (Hindi)**: सभी POST फॉर्म्स को `{% csrf_token %}` टैग के साथ सुरक्षित करें।
+* **Common Mistake**: Omitting `method="post"` in form tags. Defaulting to standard `GET` maps credentials directly in request URLs.
+* **Common Mistake (Hindi)**: फॉर्म्स में `method="post"` न लिखना, जिससे इनपुट डेटा URL में दिखने लगता है।
+* **Common Mistake**: Trying to render forms without displaying error lists like `{{ field.errors }}` which leaves users confused on form validation failures.
+* **Common Mistake (Hindi)**: एरर्स (`field.errors`) दिखाना भूल जाना, जिससे यूजर को पता ही नहीं चलता कि फॉर्म सबमिट क्यों नहीं हुआ।
+
+---
+
+## 5. Viva / Interview Questions (वाइवा / इंटरव्यू के प्रश्न)
+
+1. **Question**: What is the purpose of Django's `cleaned_data` dictionary?
+   * **Answer**: It contains verified and sanitized input values after `form.is_valid()` runs successful validation routines.
+   * **Hindi Answer**: `form.is_valid()` चलने के बाद साफ और जांचा हुआ डेटा `cleaned_data` डिक्शनरी में उपलब्ध हो जाता है।
+
+2. **Question**: How does Django protect against Cross-Site Request Forgery (CSRF)?
+   * **Answer**: By verifying a hidden cryptographic token inside incoming POST requests against a cookie token set in the user's browser session.
+   * **Hindi Answer**: यह POST रिक्वेस्ट में भेजे गए सीक्रेट टोकन की तुलना यूज़र ब्राउज़र सेशन में सेट कुकी टोकन से करके सुरक्षा प्रदान करता है।
+
+3. **Question**: What is password hashing and why is it crucial?
+   * **Answer**: Hashing converts a plaintext password into an irreversible, fixed-length encrypted string using cryptographic algorithms (like PBKDF2). This prevents hackers from viewing passwords even if they gain access to the database.
+   * **Hindi Answer**: पासवर्ड हैशिंग एक ऐसी तकनीक है जो पासवर्ड को एक जटिल सुरक्षित कोड में बदल देती है जिसे वापस सादे शब्द में बदला नहीं जा सकता।
+
+4. **Question**: What does the `@login_required` decorator do behind the scenes?
+   * **Answer**: It intercepts view requests. If the user session isn't logged in, it intercepts the request and redirects them to the page configured in `login_url` with the original URL set in `next`.
+   * **Hindi Answer**: यह यूजर सेशन चेक करता है। यदि यूजर लॉगिन नहीं है, तो उसे लॉगिन यूआरएल पर भेज देता है और `next` पैरामीटर में वापस आने वाले पेज का पाथ रख लेता है।
+
+5. **Question**: Why do we override the standard `save()` method in a custom `ModelForm` registration?
+   * **Answer**: The standard `ModelForm.save()` would write the input fields directly to the DB. Since passwords should never be written in plaintext, we override it to call `set_password()` to perform hashing first.
+   * **Hindi Answer**: डिफ़ॉल्ट `save()` पासवर्ड को प्लेन टेक्स्ट में डेटाबेस में लिख देगा। इसलिए हम उसे ओवरराइड करके पहले `set_password()` से पासवर्ड हैश करते हैं।
+
+
 
