@@ -20,6 +20,13 @@ class ModelTests(TestCase):
         )
         self.group.members.add(self.user1, self.user2, self.user3)
 
+        # Create a member for paid_by checks
+        self.member1 = Member.objects.create(
+            group=self.group,
+            name='Alice Member',
+            email='alice@example.com'
+        )
+
     def test_group_creation(self):
         self.assertEqual(self.group.name, 'Trip to Goa')
         self.assertEqual(self.group.members.count(), 3)
@@ -28,22 +35,26 @@ class ModelTests(TestCase):
     def test_expense_creation(self):
         expense = Expense.objects.create(
             group=self.group,
-            description='Dinner bill',
+            title='Dinner bill',
             amount=90.00,
-            paid_by=self.user1,
-            date=date.today()
+            paid_by=self.member1,
+            date=date.today(),
+            category='Food',
+            created_by=self.user1
         )
-        self.assertEqual(expense.description, 'Dinner bill')
+        self.assertEqual(expense.title, 'Dinner bill')
         self.assertEqual(expense.amount, 90.00)
         self.assertEqual(str(expense), f"Dinner bill - 90.00 in Trip to Goa")
 
     def test_expense_split(self):
         expense = Expense.objects.create(
             group=self.group,
-            description='Dinner bill',
+            title='Dinner bill',
             amount=90.00,
-            paid_by=self.user1,
-            date=date.today()
+            paid_by=self.member1,
+            date=date.today(),
+            category='Food',
+            created_by=self.user1
         )
         # Create splits
         split1 = ExpenseSplit.objects.create(expense=expense, user=self.user1, amount=30.00)
@@ -465,5 +476,165 @@ class MemberCRUDTests(TestCase):
         response = self.client.post(self.delete_url)
         self.assertRedirects(response, self.list_url)
         self.assertFalse(Member.objects.filter(pk=self.member.pk).exists())
+
+
+class ExpenseCRUDTests(TestCase):
+    def setUp(self):
+        # Create users
+        self.user1 = User.objects.create_user(username='alice', email='alice@example.com', password='password123')
+        self.user2 = User.objects.create_user(username='bob', email='bob@example.com', password='password123')
+
+        # Create Alice's Group
+        self.group = Group.objects.create(
+            name='Alice Goa Trip',
+            description='Trip to Goa funded by Alice',
+            created_by=self.user1
+        )
+        self.group.members.add(self.user1)
+
+        # Create members for Alice's Group
+        self.member1 = Member.objects.create(group=self.group, name='John Doe', email='john@example.com')
+        self.member2 = Member.objects.create(group=self.group, name='Jane Doe', email='jane@example.com')
+
+        # Create a group for Bob to verify separation
+        self.bob_group = Group.objects.create(
+            name='Bob Secret Group',
+            created_by=self.user2
+        )
+        self.bob_member = Member.objects.create(group=self.bob_group, name='Charlie')
+
+        # Create an expense in Alice's Group
+        self.expense = Expense.objects.create(
+            group=self.group,
+            title='Dinner at beach',
+            amount=1500.00,
+            paid_by=self.member1,
+            date=date.today(),
+            category='Food',
+            created_by=self.user1
+        )
+
+        # URLs for Alice's Group
+        self.list_url = reverse('expense_list', args=[self.group.pk])
+        self.create_url = reverse('expense_create', args=[self.group.pk])
+        self.detail_url = reverse('expense_detail', args=[self.group.pk, self.expense.pk])
+        self.update_url = reverse('expense_update', args=[self.group.pk, self.expense.pk])
+        self.delete_url = reverse('expense_delete', args=[self.group.pk, self.expense.pk])
+        
+        self.login_url = reverse('login')
+
+    def test_expense_pages_require_login(self):
+        """Verify unauthenticated users cannot access expense pages."""
+        urls = [self.list_url, self.create_url, self.detail_url, self.update_url, self.delete_url]
+        for url in urls:
+            response = self.client.get(url)
+            self.assertRedirects(response, f"{self.login_url}?next={url}")
+
+    def test_expense_pages_unauthorized(self):
+        """Verify logged-in user cannot manage expenses in a group they don't own."""
+        self.client.login(username='bob', password='password123')
+        urls = [self.list_url, self.create_url, self.detail_url, self.update_url, self.delete_url]
+        for url in urls:
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 404)
+
+            # Test POST queries too
+            if url == self.create_url:
+                response = self.client.post(url, data={'title': 'Steal'})
+            elif url == self.delete_url:
+                response = self.client.post(url)
+            else:
+                response = self.client.post(url, data={'title': 'Steal'})
+            self.assertEqual(response.status_code, 404)
+
+    def test_expense_list_success(self):
+        """Verify creator can view expense list and sum total."""
+        self.client.login(username='alice', password='password123')
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'expenses/expense_list.html')
+        self.assertContains(response, 'Dinner at beach')
+        self.assertEqual(response.context['total_amount'], 1500.00)
+
+    def test_expense_detail_success(self):
+        """Verify creator can view expense detail page."""
+        self.client.login(username='alice', password='password123')
+        response = self.client.get(self.detail_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'expenses/expense_detail.html')
+        self.assertContains(response, 'Dinner at beach')
+        self.assertContains(response, 'Food')
+
+    def test_expense_create_success(self):
+        """Verify creator can add a new expense."""
+        self.client.login(username='alice', password='password123')
+        payload = {
+            'title': 'Cab Fare',
+            'description': 'Goa Airport to hotel',
+            'amount': 1200.00,
+            'paid_by': self.member2.pk,
+            'date': date.today(),
+            'category': 'Travel',
+            'notes': 'Paid in cash'
+        }
+        response = self.client.post(self.create_url, data=payload)
+        self.assertRedirects(response, self.list_url)
+        self.assertTrue(Expense.objects.filter(title='Cab Fare', group=self.group).exists())
+
+    def test_expense_create_invalid_amount(self):
+        """Verify validation errors if expense amount is 0 or negative."""
+        self.client.login(username='alice', password='password123')
+        payload = {
+            'title': 'Free Water',
+            'amount': 0.00,  # invalid amount
+            'paid_by': self.member1.pk,
+            'date': date.today(),
+            'category': 'Drinks'
+        }
+        response = self.client.post(self.create_url, data=payload)
+        self.assertEqual(response.status_code, 200)
+        form = response.context['form']
+        self.assertFalse(form.is_valid())
+        self.assertIn('amount', form.errors)
+        self.assertIn("Expense amount must be greater than zero.", form.errors['amount'][0])
+
+    def test_expense_paid_by_dropdown_filtering(self):
+        """Verify that only members of the current group are available in paid_by dropdown."""
+        self.client.login(username='alice', password='password123')
+        response = self.client.get(self.create_url)
+        self.assertEqual(response.status_code, 200)
+        
+        # Check that member1 and member2 are present in paid_by choices, but bob_member is not
+        form = response.context['form']
+        queryset = form.fields['paid_by'].queryset
+        self.assertIn(self.member1, queryset)
+        self.assertIn(self.member2, queryset)
+        self.assertNotIn(self.bob_member, queryset)
+
+    def test_expense_update_success(self):
+        """Verify creator can update expense details."""
+        self.client.login(username='alice', password='password123')
+        payload = {
+            'title': 'Dinner at beach (Updated)',
+            'description': 'Description change',
+            'amount': 1800.00,
+            'paid_by': self.member1.pk,
+            'date': date.today(),
+            'category': 'Food'
+        }
+        response = self.client.post(self.update_url, data=payload)
+        self.assertRedirects(response, self.list_url)
+        
+        self.expense.refresh_from_db()
+        self.assertEqual(self.expense.title, 'Dinner at beach (Updated)')
+        self.assertEqual(self.expense.amount, 1800.00)
+
+    def test_expense_delete_success(self):
+        """Verify creator can delete expense."""
+        self.client.login(username='alice', password='password123')
+        response = self.client.post(self.delete_url)
+        self.assertRedirects(response, self.list_url)
+        self.assertFalse(Expense.objects.filter(pk=self.expense.pk).exists())
+
 
 

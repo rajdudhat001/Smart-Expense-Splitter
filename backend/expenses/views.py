@@ -2,8 +2,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .forms import UserRegistrationForm, UserLoginForm, GroupForm, MemberForm
-from .models import Group, Member
+from .forms import UserRegistrationForm, UserLoginForm, GroupForm, MemberForm, ExpenseForm
+from .models import Group, Member, Expense
 
 def register_view(request):
     """
@@ -201,5 +201,111 @@ def member_delete_view(request, group_pk, member_pk):
         messages.success(request, f"Member '{member_name}' removed successfully! / सदस्य '{member_name}' सफलतापूर्वक हटा दिया गया!")
         return redirect('member_list', group_pk=group.pk)
     return render(request, 'expenses/member_delete.html', {'group': group, 'member': member})
+
+
+@login_required(login_url='login')
+def expense_list_view(request, group_pk):
+    """
+    List all expenses inside a group. Access restricted to group creator.
+    """
+    group = get_object_or_404(Group, pk=group_pk, created_by=request.user)
+    expenses = group.expenses.all().order_by('-date', '-created_at')
+    
+    # Calculate sum total of expenses in the group
+    total_amount = sum(expense.amount for expense in expenses)
+    return render(request, 'expenses/expense_list.html', {
+        'group': group,
+        'expenses': expenses,
+        'total_amount': total_amount
+    })
+
+
+@login_required(login_url='login')
+def expense_detail_view(request, group_pk, expense_pk):
+    """
+    Display details of a specific expense. Access restricted to group creator.
+    """
+    group = get_object_or_404(Group, pk=group_pk, created_by=request.user)
+    expense = get_object_or_404(Expense, pk=expense_pk, group=group)
+    return render(request, 'expenses/expense_detail.html', {
+        'group': group,
+        'expense': expense
+    })
+
+
+@login_required(login_url='login')
+def expense_create_view(request, group_pk):
+    """
+    Add a new expense. Access restricted to group creator.
+    """
+    group = get_object_or_404(Group, pk=group_pk, created_by=request.user)
+    
+    # Verify the group has at least one member to attribute "Paid By"
+    if not group.group_members.exists():
+        messages.error(request, "Please add at least one member to the group before adding expenses. / खर्च जोड़ने से पहले कृपया ग्रुप में कम से कम एक सदस्य जोड़ें।")
+        return redirect('member_list', group_pk=group.pk)
+
+    if request.method == 'POST':
+        form = ExpenseForm(request.POST, group=group)
+        if form.is_valid():
+            expense = form.save(commit=False)
+            expense.group = group
+            expense.created_by = request.user
+            expense.save()
+            messages.success(request, "Expense added successfully! / खर्च सफलतापूर्वक जोड़ा गया!")
+            return redirect('expense_list', group_pk=group.pk)
+        else:
+            messages.error(request, "Error adding expense. Please fix the errors below. / खर्च जोड़ने में त्रुटि। कृपया नीचे दिए गए एरर्स को सुधारें।")
+    else:
+        form = ExpenseForm(group=group)
+    return render(request, 'expenses/expense_create.html', {
+        'form': form,
+        'group': group
+    })
+
+
+@login_required(login_url='login')
+def expense_update_view(request, group_pk, expense_pk):
+    """
+    Update details of an existing expense. Access restricted to group creator.
+    """
+    group = get_object_or_404(Group, pk=group_pk, created_by=request.user)
+    expense = get_object_or_404(Expense, pk=expense_pk, group=group)
+    
+    if request.method == 'POST':
+        form = ExpenseForm(request.POST, instance=expense, group=group)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Expense updated successfully! / खर्च सफलतापूर्वक अपडेट किया गया!")
+            return redirect('expense_list', group_pk=group.pk)
+        else:
+            messages.error(request, "Error updating expense. Please fix the errors below. / खर्च अपडेट करने में त्रुटि। कृपया नीचे दिए गए एरर्स को सुधारें।")
+    else:
+        form = ExpenseForm(instance=expense, group=group)
+    return render(request, 'expenses/expense_update.html', {
+        'form': form,
+        'group': group,
+        'expense': expense
+    })
+
+
+@login_required(login_url='login')
+def expense_delete_view(request, group_pk, expense_pk):
+    """
+    Delete an existing expense. Access restricted to group creator.
+    """
+    group = get_object_or_404(Group, pk=group_pk, created_by=request.user)
+    expense = get_object_or_404(Expense, pk=expense_pk, group=group)
+    
+    if request.method == 'POST':
+        expense_title = expense.title
+        expense.delete()
+        messages.success(request, f"Expense '{expense_title}' deleted successfully! / खर्च '{expense_title}' सफलतापूर्वक हटा दिया गया!")
+        return redirect('expense_list', group_pk=group.pk)
+    return render(request, 'expenses/expense_delete.html', {
+        'group': group,
+        'expense': expense
+    })
+
 
 

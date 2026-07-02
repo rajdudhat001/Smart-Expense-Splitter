@@ -16,5 +16,13 @@ urlpatterns = [
     path('groups/<int:group_pk>/members/add/', views.member_create_view, name='member_create'),
     path('groups/<int:group_pk>/members/<int:member_pk>/update/', views.member_update_view, name='member_update'),
     path('groups/<int:group_pk>/members/<int:member_pk>/delete/', views.member_delete_view, name='member_delete'),
+
+    # Expense Management URLs
+    path('groups/<int:group_pk>/expenses/', views.expense_list_view, name='expense_list'),
+    path('groups/<int:group_pk>/expenses/add/', views.expense_create_view, name='expense_create'),
+    path('groups/<int:group_pk>/expenses/<int:expense_pk>/', views.expense_detail_view, name='expense_detail'),
+    path('groups/<int:group_pk>/expenses/<int:expense_pk>/update/', views.expense_update_view, name='expense_update'),
+    path('groups/<int:group_pk>/expenses/<int:expense_pk>/delete/', views.expense_delete_view, name='expense_delete'),
 ]
+
 

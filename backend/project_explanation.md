@@ -811,6 +811,193 @@ In Django, database tables are not modified directly. We write Python models, an
     * **Hindi Answer**: `python manage.py test` के आगे ऐप का नाम लिखकर, जैसे `python manage.py test expenses`।
 
 
+---
+---
 
+# PHASE 7: Expense CRUD Operations (फेज 7: एक्सपेंस क्रूड ऑपरेशन्स)
 
+## 1. Objective (लक्ष्य)
+* **English**: Provide full Expense management capabilities. Users can add, view lists/details, edit, and delete expense entries inside their own groups.
+* **Hindi**: खर्चे मैनेज करने के लिए संपूर्ण ऑपरेशन्स प्रदान करना। यूज़र्स अपने बनाए गए ग्रुप्स में खर्चे जोड़ सकते हैं, उनकी लिस्ट/डिटेल्स देख सकते हैं, उन्हें बदल सकते हैं और डिलीट कर सकते हैं।
 
+## 2. Architecture (आर्किटेक्चर)
+* **English**: Implemented using Django's Model-View-Template (MVT) architecture.
+  - **Model**: Customizes the `Expense` model schema to link with a `Member` object instead of a Django `User`.
+  - **View**: Implements controller logic ensuring login security, group owner restriction, dynamic paid_by dropdown filter, and transaction deletion.
+  - **Template**: Provides glassmorphic dark-themed Bootstrap HTML pages.
+* **Hindi**: Django के Model-View-Template (MVT) आर्किटेक्चर का उपयोग किया गया है।
+  - **Model**: `Expense` मॉडल की स्कीमा को संशोधित करके `paid_by` को Django `User` के बजाय ग्रुप के `Member` से जोड़ा गया है।
+  - **View**: कंट्रोलर लॉजिक जो लॉगिन सुरक्षा, ग्रुप ओनर प्रतिबंध, डायनेमिक dropdown फ़िल्टर और डिलीट ऑपरेशन्स को संभालता है।
+  - **Template**: सुंदर बूटस्ट्रैप ग्लासमोर्फिक डार्क-थीम वाले HTML पेजेस प्रदान करता है।
+
+## 3. Folder/File Changes (फ़ोल्डर/फ़ाइल बदलाव)
+* **English**:
+  - **Modified** [models.py](file:///d:/demo_SES/backend/expenses/models.py): Redefined `Expense` attributes and adjusted `ExpenseSplit` references.
+  - **Modified** [forms.py](file:///d:/demo_SES/backend/expenses/forms.py): Added `ExpenseForm` with customized inputs and positive amount validation.
+  - **Modified** [views.py](file:///d:/demo_SES/backend/expenses/views.py): Added `expense_list_view`, `expense_detail_view`, `expense_create_view`, `expense_update_view`, `expense_delete_view`.
+  - **Modified** [urls.py](file:///d:/demo_SES/backend/expenses/urls.py): Registered expense CRUD routes under group IDs.
+  - **Modified** [group_list.html](file:///d:/demo_SES/backend/expenses/templates/expenses/group_list.html): Added "Expenses" button.
+  - **Created** [expense_list.html](file:///d:/demo_SES/backend/expenses/templates/expenses/expense_list.html): Displays expenses table and total sum.
+  - **Created** [expense_create.html](file:///d:/demo_SES/backend/expenses/templates/expenses/expense_create.html): Add expense form.
+  - **Created** [expense_detail.html](file:///d:/demo_SES/backend/expenses/templates/expenses/expense_detail.html): Detailed parameters viewer.
+  - **Created** [expense_update.html](file:///d:/demo_SES/backend/expenses/templates/expenses/expense_update.html): Edit form.
+  - **Created** [expense_delete.html](file:///d:/demo_SES/backend/expenses/templates/expenses/expense_delete.html): Confirms expense removal.
+  - **Modified** [tests.py](file:///d:/demo_SES/backend/expenses/tests.py): Created `ExpenseCRUDTests` class and adjusted `ModelTests` instances.
+* **Hindi**:
+  - **Modified** [models.py](file:///d:/demo_SES/backend/expenses/models.py): `Expense` मॉडल की स्कीमा अपडेट की और `ExpenseSplit` के रेफरेंस सुधारे।
+  - **Modified** [forms.py](file:///d:/demo_SES/backend/expenses/forms.py): `ExpenseForm` क्लास बनाई जिसमें इनपुट कस्टमाइज़ेशन और धनात्मक अमाउंट वैलिडेशन है।
+  - **Modified** [views.py](file:///d:/demo_SES/backend/expenses/views.py): एक्सपेंस के पांचों CRUD व्यूज़ लिखे।
+  - **Modified** [urls.py](file:///d:/demo_SES/backend/expenses/urls.py): मेंबर्स के राउट्स के समान खर्चे के राउट्स भी रजिस्टर किए।
+  - **Modified** [group_list.html](file:///d:/demo_SES/backend/expenses/templates/expenses/group_list.html): प्रत्येक ग्रुप के सामने "Expenses" बटन जोड़ा।
+  - **Created** [expense_list.html](file:///d:/demo_SES/backend/expenses/templates/expenses/expense_list.html) बनाया: खर्चे की टेबल और उनका टोटल दिखाने वाला पेज।
+  - **Created** [expense_create.html](file:///d:/demo_SES/backend/expenses/templates/expenses/expense_create.html) बनाया: खर्चे जोड़ने का फॉर्म।
+  - **Created** [expense_detail.html](file:///d:/demo_SES/backend/expenses/templates/expenses/expense_detail.html) बनाया: एक खर्चे की विस्तृत जानकारी दिखाने वाला पेज।
+  - **Created** [expense_update.html](file:///d:/demo_SES/backend/expenses/templates/expenses/expense_update.html) बनाया: खर्चे के बदलावों का फॉर्म।
+  - **Created** [expense_delete.html](file:///d:/demo_SES/backend/expenses/templates/expenses/expense_delete.html) बनाया: खर्च हटाने का कन्फर्मेशन पेज।
+  - **Modified** [tests.py](file:///d:/demo_SES/backend/expenses/tests.py): `ExpenseCRUDTests` टेस्ट क्लास जोड़ी और पुराने टेस्ट के सिंटैक्स सुधारे।
+
+## 4. Database Changes (डेटाबेस बदलाव)
+* **English**:
+  - Modified table `expenses_expense` with fields: `title` (max 150), `description` (optional text), `amount` (decimal), `paid_by_id` (ForeignKey to `Member`), `date` (date), `category` (max 50), `notes` (optional text), `created_by_id` (ForeignKey to Django `User`), `created_at` (datetime), and `updated_at` (datetime).
+* **Hindi**:
+  - `expenses_expense` टेबल में बदलाव किए: `title` (शीर्षक), `description` (विवरण), `amount` (राशि), `paid_by_id` (`Member` टेबल से फॉरेन की), `date` (दिनांक), `category` (श्रेणी), `notes` (टिप्पणी), `created_by_id` (`User` टेबल से फॉरेन की), `created_at` (बनने का समय), और `updated_at` (अपडेट का समय)।
+
+## 5. Models Used (मॉडल्स जिनका उपयोग किया गया)
+* **English**:
+  - `Group`: To link the expense to a specific group.
+  - `Member`: To represent who made the payment (`paid_by` ForeignKey).
+  - `User`: To link the creator of the expense row (`created_by` ForeignKey).
+  - `Expense`: Holds primary transactional data.
+* **Hindi**:
+  - `Group`: खर्चे को किसी खास ग्रुप से जोड़ने के लिए।
+  - `Member`: भुगतान करने वाले सदस्य को दर्शाने के लिए (`paid_by` फॉरेन की)।
+  - `User`: खर्च को डेटाबेस में जोड़ने वाले ऑथेंटिकेटेड यूज़र को दर्शाने के लिए (`created_by` फॉरेन की)।
+  - `Expense`: खर्चे की मुख्य जानकारी स्टोर करने के लिए।
+
+## 6. Forms Used (फॉर्म्स जिनका उपयोग किया गया)
+* **English**:
+  - `ExpenseForm`: Inherits `forms.ModelForm` to generate clean Bootstrap form controls. Restricts the `paid_by` selection options utilizing:
+    `self.fields['paid_by'].queryset = Member.objects.filter(group=group)`
+* **Hindi**:
+  - `ExpenseForm`: यह `forms.ModelForm` का उपयोग करके बूटस्ट्रैप इनपुट जनरेट करता है। भुगतान करने वाले सदस्य (paid_by) की लिस्ट को केवल उस ग्रुप के मेंबर्स तक सीमित रखने के लिए फ़िल्टर लगाता है।
+
+## 7. Views Used (व्यूज़ जिनका उपयोग किया गया)
+* **English**:
+  - `expense_list_view`: Prepares expenses sorted by date and sum total amount.
+  - `expense_detail_view`: Feeds full instance parameters to template.
+  - `expense_create_view`: Processes new entries, automatically links context group and logs user creator.
+  - `expense_update_view`: Updates details.
+  - `expense_delete_view`: Deletes expense with proper messaging.
+* **Hindi**:
+  - `expense_list_view`: खर्चे की सूची तारीख के अनुसार व्यवस्थित करता है और कुल राशि जोड़ता है।
+  - `expense_detail_view`: खर्चे के सभी फ़ील्ड्स को स्क्रीन पर दिखाने के लिए भेजता है।
+  - `expense_create_view`: नया खर्च सेव करता है, ग्रुप और यूज़र को ऑटो-लिंक करता है।
+  - `expense_update_view`: विवरणों को अपडेट करता है।
+  - `expense_delete_view`: खर्चे को सुरक्षित रूप से हटाता है।
+
+## 8. URL Flow (यूआरएल फ्लो)
+* **English**:
+  - `/groups/<group_pk>/expenses/` -> list expenses
+  - `/groups/<group_pk>/expenses/add/` -> create expense
+  - `/groups/<group_pk>/expenses/<expense_pk>/` -> detail expense
+  - `/groups/<group_pk>/expenses/<expense_pk>/update/` -> update expense
+  - `/groups/<group_pk>/expenses/<expense_pk>/delete/` -> delete expense
+* **Hindi**:
+  - `/groups/<group_pk>/expenses/` -> खर्चे की लिस्ट
+  - `/groups/<group_pk>/expenses/add/` -> नया खर्च जोड़ना
+  - `/groups/<group_pk>/expenses/<expense_pk>/` -> खर्चे का विस्तृत विवरण
+  - `/groups/<group_pk>/expenses/<expense_pk>/update/` -> खर्चे में बदलाव
+  - `/groups/<group_pk>/expenses/<expense_pk>/delete/` -> खर्चे को डिलीट करना
+
+## 9. CRUD Flow Diagram (क्रूड फ्लो डायग्राम)
+```mermaid
+graph TD
+    A[Group List Page] -->|Click Expenses| B[Expense List Page]
+    B -->|Click Add Expense| C[Expense Form Page]
+    C -->|Submit Valid Form| B
+    B -->|Click View Details| D[Expense Detail Page]
+    D -->|Click Edit| E[Expense Edit Page]
+    E -->|Submit Valid Changes| B
+    D -->|Click Delete| F[Delete Confirmation Page]
+    F -->|Confirm POST| B
+```
+
+## 10. Commands Used (कमांड्स जिनका उपयोग किया गया)
+* **English**:
+  - `python manage.py makemigrations` (Generate schema change script)
+  - `python manage.py migrate` (Execute schema adjustments)
+  - `python manage.py test expenses` (Run automated tests)
+* **Hindi**:
+  - `python manage.py makemigrations` (स्कीमा बदलावों की फाइल तैयार करना)
+  - `python manage.py migrate` (डेटाबेस में बदलाव लागू करना)
+  - `python manage.py test expenses` (सारे टेस्ट्स रन करना)
+
+## 11. Validation Rules (वैलिडेशन रूल्स)
+* **English**:
+  - Amount must be greater than zero (`amount > 0`).
+  - The `paid_by` member must belong to the target group.
+  - Required fields (Title, Amount, Paid By, Date, Category) cannot be empty.
+* **Hindi**:
+  - खर्चे की राशि शून्य से अधिक होनी चाहिए (`amount > 0`)।
+  - भुगतान करने वाला व्यक्ति (`paid_by`) उसी ग्रुप का सदस्य होना चाहिए।
+  - अनिवार्य फ़ील्ड्स (Title, Amount, Paid By, Date, Category) खाली नहीं हो सकते।
+
+## 12. Common Mistakes (आम गलतियां)
+* **English**:
+  - Not restricting the `paid_by` queryset to the specific group, causing users to see members of other groups in the dropdown list.
+  - Omitting ownership check of the group in views, allowing users to modify expenses of groups they do not own.
+* **Hindi**:
+  - `paid_by` फ़ील्ड में फ़िल्टर न लगाना, जिससे एक ग्रुप में किसी दूसरे ग्रुप के मेंबर्स का नाम भी दिखने लगता है।
+  - ग्रुप चेक के बिना सीधे प्राइमरी की से एक्सपेंस फ़ेच करना, जिससे कोई दूसरा यूज़र उस यूआरएल को हैक कर सकता है।
+
+## 13. Best Practices (सर्वोत्तम प्रथाएं)
+* **English**:
+  - Use Django custom validations (`clean_amount`) to enforce business rules inside the form class instead of view functions.
+  - Use related names cleanly (e.g. `group.expenses.all()`) for readable code.
+  - Write tests for authorization and validation limits (negative amounts, unauthorized users).
+* **Hindi**:
+  - खर्चे की राशि की जांच के लिए फॉर्म के अन्दर `clean_amount` लिखें, न कि व्यूज़ में।
+  - कोड की पठनीयता बढ़ाने के लिए `related_name` (जैसे `group.expenses.all()`) का सही उपयोग करें।
+  - सुरक्षा और इनपुट लिमिट्स (जैसे माइनस वैल्यू, अनऑथराइज्ड यूज़र) के लिए उचित टेस्ट्स लिखें।
+
+## 14. Viva Questions & Answers (वाइवा प्रश्न और उत्तर)
+
+1. **Question**: What is the difference between `null=True` and `blank=True` in Django models?
+   * **Answer**: `null=True` sets the database column to accept `NULL` values, whereas `blank=True` is used for field validation, allowing the field to be empty in forms.
+   * **Hindi Answer**: `null=True` डेटाबेस लेवल पर `NULL` वैल्यू स्वीकार करता है, जबकि `blank=True` फॉर्म वैलिडेशन के लिए होता है जो इनपुट को खाली छोड़ने की अनुमति देता है।
+
+2. **Question**: How did you filter the paid_by member dropdown to show only members of the current group?
+   * **Answer**: In `ExpenseForm.__init__`, we accept `group` as a keyword argument and overwrite the field's queryset with `Member.objects.filter(group=group)`.
+   * **Hindi Answer**: `ExpenseForm` के `__init__` मेथड में हम व्यू से एक्टिव `group` ऑब्जेक्ट लेते हैं और `paid_by` का क्वेरीसेट `Member.objects.filter(group=group)` पर सेट करते हैं।
+
+3. **Question**: Why did you use `decimal_places=2` in the Amount field?
+   * **Answer**: It is standard for currency fields to store exact fractional amounts to prevent float rounding errors.
+   * **Hindi Answer**: यह करेंसी (मुद्रा) के लिए मानक है ताकि दशमलव के बाद 2 अंकों तक की वैल्यूज़ का हिसाब बिना किसी राउंडिंग एरर के रखा जा सके।
+
+4. **Question**: What is the difference between `auto_now_add` and `auto_now`?
+   * **Answer**: `auto_now_add` sets the timestamp only when the record is created. `auto_now` updates the timestamp every time the record is saved.
+   * **Hindi Answer**: `auto_now_add` केवल पहली बार रिकॉर्ड बनने पर समय दर्ज करता है, जबकि `auto_now` रिकॉर्ड में बदलाव होने पर हर बार नया समय अपडेट करता है।
+
+5. **Question**: What happens to expenses in a group if that group is deleted?
+   * **Answer**: Because of `on_delete=models.CASCADE` on the group ForeignKey, all expenses belonging to that group are cascade-deleted.
+   * **Hindi Answer**: ग्रुप ForeignKey में `on_delete=models.CASCADE` होने के कारण, ग्रुप डिलीट होने पर उसके सभी खर्चे भी डेटाबेस से डिलीट हो जाते हैं।
+
+6. **Question**: Why is backend validation for the amount field necessary even if HTML5 `min="0.01"` is set?
+   * **Answer**: HTML5 browser validation can be easily disabled or bypassed using browser developer tools or API clients like Postman.
+   * **Hindi Answer**: ब्राउज़र में डेवलपर टूल्स या पोस्टमैन जैसी टूल्स से HTML वैलिडेशन को आसानी से बाइपास किया जा सकता है, इसलिए बैकएंड वैलिडेशन ज़रूरी है।
+
+7. **Question**: How do you display the sum total of expenses in Django views?
+   * **Answer**: We query the expense set of the group, iterate over the objects summing their amount, or use Django's `aggregate(Sum('amount'))` query.
+   * **Hindi Answer**: हम ग्रुप के खर्चों का क्वेरीसेट निकालकर उनके अमाउंट्स का सम (Sum) निकालते हैं, या Django के एग्रीगेशन फ़ंक्शन का उपयोग करते हैं।
+
+8. **Question**: Explain the role of `created_by` in our Expense model.
+   * **Answer**: It stores a ForeignKey reference to the logged-in User who recorded the expense, ensuring accountability.
+   * **Hindi Answer**: यह उस यूज़र की आईडी स्टोर करता है जिसने खर्चे को डेटाबेस में रिकॉर्ड किया है।
+
+9. **Question**: How do you render forms dynamically in templates without hardcoding inputs?
+   * **Answer**: We loop over the fields using `{% for field in form %}` and render `{{ field }}` and `{{ field.errors }}` dynamically.
+   * **Hindi Answer**: हम टेम्पलेट में `{% for field in form %}` का लूप चलाकर `{{ field }}` और `{{ field.errors }}` को डायनेमिक रेंडर करते हैं।
+
+10. **Question**: Why is it critical to check `group.created_by == request.user` in expense views?
+    * **Answer**: To prevent unauthorized users from viewing, creating, or editing expenses of groups they do not own.
+    * **Hindi Answer**: यह सुरक्षा के लिए आवश्यक है ताकि कोई भी यूज़र दूसरों के ग्रुप के खर्चों को देख या बदल न सके।

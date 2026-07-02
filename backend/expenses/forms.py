@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from .models import Group, Member
+from .models import Group, Member, Expense
 
 
 class UserRegistrationForm(forms.ModelForm):
@@ -157,5 +157,61 @@ class MemberForm(forms.ModelForm):
             if query.exists():
                 raise ValidationError("A member with this name already exists in this group. / इस ग्रुप में इस नाम का सदस्य पहले से ही मौजूद है।")
         return name
+
+
+class ExpenseForm(forms.ModelForm):
+    """
+    Form for creating and updating Expenses.
+    Filters the paid_by field to show only members of the selected group.
+    """
+    class Meta:
+        model = Expense
+        fields = ['title', 'description', 'amount', 'paid_by', 'date', 'category', 'notes']
+        widgets = {
+            'title': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter Expense Title'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter Expense Description (Optional)',
+                'rows': 2
+            }),
+            'amount': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter Amount',
+                'step': '0.01'
+            }),
+            'paid_by': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'category': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter Category (e.g., Food, Travel)'
+            }),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter Notes (Optional)',
+                'rows': 2
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        # We pass 'group' from views to filter the paid_by dropdown options
+        self.group = kwargs.pop('group', None)
+        super().__init__(*args, **kwargs)
+        if self.group:
+            self.fields['paid_by'].queryset = Member.objects.filter(group=self.group).order_by('name')
+
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        if amount is None or amount <= 0:
+            raise ValidationError("Expense amount must be greater than zero. / खर्चे की राशि शून्य से अधिक होनी चाहिए।")
+        return amount
+
 
 
