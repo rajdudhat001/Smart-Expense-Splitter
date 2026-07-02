@@ -1,6 +1,8 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from .models import Group, Member
+
 
 class UserRegistrationForm(forms.ModelForm):
     # Password field with PasswordInput widget to hide characters
@@ -82,3 +84,78 @@ class UserLoginForm(forms.Form):
             'placeholder': 'Enter Password'
         })
     )
+
+
+class GroupForm(forms.ModelForm):
+    """
+    Form for creating and updating Groups.
+    """
+    class Meta:
+        model = Group
+        fields = ['name', 'description']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter Group Name'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter Group Description',
+                'rows': 3
+            }),
+        }
+
+    def clean_name(self):
+        """
+        Validate that the group name is not too short.
+        """
+        name = self.cleaned_data.get('name')
+        if not name or len(name.strip()) < 3:
+            raise ValidationError("Group name must be at least 3 characters long. / ग्रुप का नाम कम से कम 3 अक्षरों का होना चाहिए।")
+        return name.strip()
+
+
+class MemberForm(forms.ModelForm):
+    """
+    Form for creating and updating members of a group.
+    """
+    class Meta:
+        model = Member
+        fields = ['name', 'email', 'phone']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter Member Name'
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter Email (Optional)'
+            }),
+            'phone': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter Phone Number (Optional)'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        # We pass 'group' from views to perform uniqueness validation within that group
+        self.group = kwargs.pop('group', None)
+        super().__init__(*args, **kwargs)
+
+    def clean_name(self):
+        name = self.cleaned_data.get('name')
+        if not name or len(name.strip()) < 2:
+            raise ValidationError("Member name must be at least 2 characters long. / सदस्य का नाम कम से कम 2 अक्षरों का होना चाहिए।")
+        
+        name = name.strip()
+        if self.group:
+            # Check for duplicate names (case-insensitive) in the same group
+            query = Member.objects.filter(group=self.group, name__iexact=name)
+            # Exclude current member if updating
+            if self.instance and self.instance.pk:
+                query = query.exclude(pk=self.instance.pk)
+            if query.exists():
+                raise ValidationError("A member with this name already exists in this group. / इस ग्रुप में इस नाम का सदस्य पहले से ही मौजूद है।")
+        return name
+
+

@@ -539,5 +539,278 @@ In Django, database tables are not modified directly. We write Python models, an
    * **Answer**: The standard `ModelForm.save()` would write the input fields directly to the DB. Since passwords should never be written in plaintext, we override it to call `set_password()` to perform hashing first.
    * **Hindi Answer**: डिफ़ॉल्ट `save()` पासवर्ड को प्लेन टेक्स्ट में डेटाबेस में लिख देगा। इसलिए हम उसे ओवरराइड करके पहले `set_password()` से पासवर्ड हैश करते हैं।
 
+---
+---
+
+# PHASE 5: Group CRUD Operations (फेज 5: ग्रुप CRUD ऑपरेशन्स)
+
+## 1. Objective (उद्देश्य)
+* **English**: The objective of this phase is to implement complete CRUD (Create, Read, Update, Delete) operations for Groups using the Django MVT Architecture, ensuring that only authenticated users can access the Group pages and that users can only view, edit, or delete the groups they have created (User Isolation).
+* **Hindi**: इस फेज का उद्देश्य Django MVT आर्किटेक्चर का उपयोग करके ग्रुप्स के लिए संपूर्ण CRUD (बनाना, देखना, अपडेट करना, डिलीट करना) ऑपरेशन्स को लागू करना है, यह सुनिश्चित करते हुए कि केवल लॉगिन किए हुए यूजर्स ही ग्रुप पेजों को देख सकें और यूजर्स केवल अपने द्वारा बनाए गए ग्रुप्स को ही प्रबंधित कर सकें।
+
+## 2. Files Created (बनाई गई फ़ाइलें)
+1. `backend/expenses/templates/expenses/group_list.html`:
+   * **English**: Renders the list of groups created by the logged-in user in a premium Bootstrap table format, including edit, delete, and create-new buttons.
+   * **Hindi**: लॉगिन किए गए यूज़र द्वारा बनाए गए ग्रुप्स की सूची को एक सुंदर बूटस्ट्रैप टेबल में दिखाता है, जिसमें एडिट, डिलीट और नया ग्रुप बनाने के बटन्स शामिल हैं।
+2. `backend/expenses/templates/expenses/group_create.html`:
+   * **English**: Renders the form to create a new group using the `GroupForm` with CSRF protection and field validations.
+   * **Hindi**: नया ग्रुप बनाने के लिए `GroupForm` को CSRF सुरक्षा और फील्ड वैलिडेशन के साथ प्रदर्शित करता है।
+3. `backend/expenses/templates/expenses/group_update.html`:
+   * **English**: Renders the form to edit/update an existing group's details, pre-filled with the current data.
+   * **Hindi**: किसी मौजूदा ग्रुप के विवरण को एडिट/अपडेट करने के लिए फॉर्म रेंडर करता है, जिसमें वर्तमान जानकारी पहले से भरी होती है।
+4. `backend/expenses/templates/expenses/group_delete.html`:
+   * **English**: Renders a confirmation page for deleting a group, displaying a strong warning about the cascade deletion of associated expenses and settlements.
+   * **Hindi**: ग्रुप डिलीट करने के लिए एक कन्फर्मेशन पेज दिखाता है, जिसमें ग्रुप से जुड़े खर्चों और सेटलमेंट्स के डिलीट होने की चेतावनी दी जाती है।
+
+## 3. Files Modified (बदली गई फ़ाइलें)
+1. `backend/expenses/forms.py`:
+   * **English**: Added `GroupForm` subclassing `forms.ModelForm` to handle validation and rendering of Group names and descriptions.
+   * **Hindi**: ग्रुप के नाम और विवरण को इनपुट करने और जांचने के लिए `GroupForm` बनाया।
+2. `backend/expenses/views.py`:
+   * **English**: Implemented four controller views (`group_list_view`, `group_create_view`, `group_update_view`, `group_delete_view`) protected by `@login_required`.
+   * **Hindi**: लॉगिन की सुरक्षा के साथ ग्रुप के चारों ऑपरेशन्स (लिस्ट, क्रिएट, अपडेट, डिलीट) के लिए व्यू फंक्शन्स लिखे।
+3. `backend/expenses/urls.py`:
+   * **English**: Appended routes mapping the group view functions to specific URL endpoints.
+   * **Hindi**: ग्रुप के चारों व्यूज़ को उनके सही URL पाथ से जोड़ा।
+4. `backend/expenses/templates/expenses/base.html`:
+   * **English**: Integrated Bootstrap 5 CDN for CSS and JS components, added global display of Django system message alerts, and added a navigation link for Groups.
+   * **Hindi**: बूटस्ट्रैप 5 CDN को जोड़ा, ग्रुप्स के लिए नेविगेशन लिंक जोड़ा, और सिस्टम नोटिफिकेशन/अलर्ट्स को दिखाने की व्यवस्था की।
+5. `backend/expenses/templates/expenses/dashboard.html`:
+   * **English**: Added a quick navigation card button linking to the Groups management panel.
+   * **Hindi**: डैशबोर्ड पेज पर "Manage Groups" का बटन जोड़ा।
+
+## 4. Commands Used (उपयोग किए गए कमांड्स)
+1. **Run Migrations (माइग्रेशन्स रन करने के लिए)**:
+   ```powershell
+   .\venv\Scripts\python.exe manage.py makemigrations
+   .\venv\Scripts\python.exe manage.py migrate
+   ```
+2. **Run Unit Tests (यूनिट टेस्ट चलाए)**:
+   ```powershell
+   .\venv\Scripts\python.exe manage.py test expenses
+   ```
+3. **Start Development Server (डेवलपमेंट सर्वर शुरू किया)**:
+   ```powershell
+   .\venv\Scripts\python.exe manage.py runserver
+   ```
+
+## 5. CRUD Flow (CRUD बहाव)
+* **Create (बनाना)**: User clicks "Create New Group" -> `group_create_view` renders `GroupForm` (GET) -> User submits form -> View validates fields using form's clean methods (POST) -> Sets `created_by=request.user` -> Saves to DB -> Automatically adds creator to `members` list -> Adds success message -> Redirects to `group_list`.
+* **Read (देखना)**: User visits `/groups/` -> `group_list_view` queries DB: `Group.objects.filter(created_by=request.user)` -> Returns filtered groups list to `group_list.html` -> Renders a table of groups.
+* **Update (संशोधित करना)**: User clicks "Edit" next to a group -> `group_update_view` retrieves group by ID with ownership check -> Renders `GroupForm(instance=group)` (GET) -> User submits updates -> View validates and saves changes (POST) -> Adds success message -> Redirects to `group_list`.
+* **Delete (हटाना)**: User clicks "Delete" next to a group -> `group_delete_view` retrieves group with ownership check -> Renders `group_delete.html` confirmation page (GET) -> User submits deletion form (POST) -> Database cascades and removes group along with child records -> Redirects to `group_list` with success message.
+
+## 6. Code Explanations (कोड स्पष्टीकरण)
+
+### A. GroupForm in `forms.py` (ग्रुप फॉर्म)
+* **English Code Explanation**:
+  * `class GroupForm(forms.ModelForm):` bindings: Maps the fields of `Group` model to form inputs.
+  * `widgets`: Replaces default browser input styles with Bootstrap's `'form-control'` class and assigns custom placeholders.
+  * `clean_name(self)`: Retrieves the clean name value and checks if its stripped length is less than 3 characters. If so, it raises a `ValidationError` displaying a helpful message in English and Hindi.
+* **Hindi Code Explanation**:
+  * यह फॉर्म सीधे `Group` मॉडल से जुड़ा है और उसके `name` और `description` फ़ील्ड्स को इनपुट बॉक्स में बदलता है।
+  * `widgets` का उपयोग इनपुट बॉक्स में बूटस्ट्रैप स्टाइल लागू करने के लिए किया गया है।
+  * `clean_name` यह सुनिश्चित करता है कि ग्रुप का नाम कम से कम 3 अक्षरों का हो, नहीं तो एरर दिखाता है।
+
+### B. CRUD Views in `views.py` (व्यूज़ स्पष्टीकरण)
+* **English Code Explanation**:
+  * `@login_required(login_url='login')`: A decorator that redirects unauthenticated users to the login page before they can access any of the group pages.
+  * `Group.objects.filter(created_by=request.user)`: Enforces User Isolation. Logged-in users will only retrieve groups they created.
+  * `get_object_or_404(Group, pk=pk, created_by=request.user)`: Standard Django helper that retrieves the group with the given ID *only* if the creator is the logged-in user. If not found or owned by someone else, it triggers a `404 Not Found` page immediately, preventing unauthorized access.
+  * `group.members.add(request.user)`: Explicitly links the creator to the group's members list upon creation.
+  * `messages.success()` / `messages.error()`: Pushes user-friendly feedback alerts to the messages storage backend.
+* **Hindi Code Explanation**:
+  * `@login_required` यह सुनिश्चित करता है कि बिना लॉगिन किए कोई भी यूज़र इन पेजों तक न पहुंच सके।
+  * `Group.objects.filter(created_by=request.user)` केवल वही ग्रुप्स डेटाबेस से लाता है जो वर्तमान लॉगिन यूजर ने बनाए हैं।
+  * `get_object_or_404(Group, pk=pk, created_by=request.user)` यह चेक करता है कि जो ग्रुप एडिट या डिलीट किया जा रहा है, वह उसी यूज़र का है या नहीं। यदि नहीं, तो सीधे 404 (Not Found) एरर देता है।
+  * `group.members.add(request.user)` ग्रुप बनाने वाले को खुद-ब-खुद उसका मेंबर बना देता है।
+
+## 7. Django Concepts Used (उपयोग की गई जैंगो अवधारणाएं)
+* **ModelForm**: Dynamically generates form fields and HTML tags based on a database model.
+* **User Isolation / Ownership**: Filtering database records using `created_by=request.user` to protect private data.
+* **get_object_or_404**: A safe Django function that attempts to query a row from the database and returns a 404 response if the record does not match the search constraints.
+* **CSRF Token Protection**: Securing POST actions using hidden unique cryptographic request tokens.
+* **Django Messages Framework**: Temporary cookied session alerts displayed to users upon successful operations.
+
+## 8. Common Mistakes (आम गलतियां)
+* **Mistake**: Forgetting to restrict edit/delete views. If you retrieve group by `Group.objects.get(pk=pk)` without checking `created_by=request.user`, any logged-in user can modify or delete another user's group by changing the ID in the URL.
+* **Hindi Mistake**: एडिट/डिलीट व्यूज़ को केवल आईडी से खोजना और ओनरशिप चेक न करना। इससे कोई भी यूजर यूआरएल में आईडी बदलकर दूसरों के ग्रुप डिलीट या एडिट कर सकता है।
+* **Mistake**: Not calling `group.members.add(request.user)` on group save. This leaves the group creator out of the members list, which will break split calculations.
+* **Hindi Mistake**: ग्रुप बनाने के बाद निर्माता (creator) को मेंबर्स में जोड़ना भूल जाना, जिससे आगे खर्चों के बंटवारे में गड़बड़ी होगी।
+
+## 9. Best Practices (बेस्ट प्रैक्टिसेज)
+* **Best Practice**: Use `get_object_or_404` with filter criteria (like `created_by=request.user`) directly to perform query and ownership verification in a single, atomic operation.
+* **Best Practice (Hindi)**: डेटाबेस से रिकॉर्ड निकालते समय ओनरशिप की जांच (जैसे `created_by=request.user`) उसी क्वेरी में करें ताकि सिक्योरिटी बनी रहे।
+* **Best Practice**: Always set `method="post"` on delete confirmation forms and secure them with `{% csrf_token %}` to prevent malicious deletions via simple GET links.
+* **Best Practice (Hindi)**: डिलीट फॉर्म में हमेशा `POST` मेथड और `{% csrf_token %}` का उपयोग करें ताकि कोई भी आपकी अनुमति के बिना लिंक क्लिक करवाकर डेटा न डिलीट करा सके।
+
+## 10. Viva / Interview Questions (वाइवा / इंटरव्यू के प्रश्न)
+
+1. **Question**: What is the difference between Django Forms and Django ModelForms?
+   * **Answer**: `forms.Form` is a general form class where fields are defined manually. `forms.ModelForm` is linked to a database model, generating the fields and validation rules automatically based on the model's schema.
+   * **Hindi Answer**: `forms.Form` एक सामान्य फॉर्म है जिसमें फ़ील्ड्स को हाथ से लिखना पड़ता है। `forms.ModelForm` सीधे एक डेटाबेस मॉडल से जुड़ा होता है और फ़ील्ड्स को ऑटोमैटिकली बना देता है।
+
+2. **Question**: How do we ensure that a user can only edit or delete groups they created?
+   * **Answer**: We query the group using `get_object_or_404(Group, pk=pk, created_by=request.user)`. This checks both the primary key and the creator relationship in a single query, raising a 404 if the user doesn't own it.
+   * **Hindi Answer**: हम क्वेरी में `created_by=request.user` का फ़िल्टर लगाते हैं। यदि कोई यूज़र दूसरों का ग्रुप एक्सेस करने की कोशिश करता है, तो उसे 404 (Not Found) एरर मिल जाता है।
+
+3. **Question**: Why is `commit=False` used during `form.save()` in the create view?
+   * **Answer**: It creates the model instance in memory without saving it to the database immediately. This allows us to assign the logged-in user as the creator (`group.created_by = request.user`) before permanently writing the row.
+   * **Hindi Answer**: `commit=False` मॉडल का ऑब्जेक्ट मेमोरी में बनाता है लेकिन तुरंत डेटाबेस में सेव नहीं करता, जिससे हम डेटाबेस में सेव करने से पहले उसमें `created_by` असाइन कर सकें।
+
+4. **Question**: Explain how the Django Messages framework displays success and error alerts.
+   * **Answer**: The messages framework stores short notifications in the user's cookies/session. In the HTML templates, we iterate through the `messages` context variable and render them using styling alerts (like Bootstrap alerts).
+   * **Hindi Answer**: यह यूज़र के कुकीज़ या सेशन में छोटे संदेशों को स्टोर करता है। टेम्पलेट में हम `messages` लूप चलाकर बूटस्ट्रैप अलर्ट के ज़रिए स्क्रीन पर दिखाते हैं।
+
+5. **Question**: What happens to a group's expenses when the group is deleted?
+   * **Answer**: Since the `group` foreign key in the `Expense` model is configured with `on_delete=models.CASCADE`, deleting a group triggers a cascade delete, removing all its expenses automatically.
+   * **Hindi Answer**: चूँकि `Expense` मॉडल में ग्रुप फ़ील्ड में `on_delete=models.CASCADE` सेट है, इसलिए ग्रुप डिलीट होते ही उससे जुड़े सभी खर्चे डेटाबेस से खुद-ब-खुद हट जाते हैं।
+
+6. **Question**: How does adding Bootstrap classes to forms using Django Form widgets improve user experience?
+   * **Answer**: Widgets allow python code to inject CSS classes like `'form-control'` directly into the generated HTML elements, aligning the forms with modern Bootstrap visual layouts.
+   * **Hindi Answer**: विजेट्स के ज़रिए पायथन कोड से ही HTML इनपुट एलिमेंट्स में बूटस्ट्रैप की CSS क्लासेस जोड़ी जा सकती हैं, जिससे फॉर्म्स सुंदर दिखते हैं।
+
+7. **Question**: Why is input validation performed on the backend even if front-end validation is present?
+   * **Answer**: Front-end validation can be bypassed easily by editing the HTML DOM or using API clients like Postman. Backend validation is the ultimate line of defense to maintain database safety and integrity.
+   * **Hindi Answer**: फ्रंट-एंड वैलिडेशन को ब्राउज़र में बंद या बदला जा सकता है। डेटाबेस को गलत डेटा से बचाने के लिए बैकएंड वैलिडेशन ही सबसे सुरक्षित और अंतिम उपाय है।
+
+
+---
+---
+
+# PHASE 6: Group Member Management (फेज 6: ग्रुप मेंबर मैनेजमेंट)
+
+## 1. Objective (लक्ष्य)
+* **English**: Introduce features to manage group members. Users can view, add, update, and remove members inside their created groups.
+* **Hindi**: ग्रुप के सदस्यों को मैनेज करने के लिए फीचर्स जोड़ना। यूज़र्स अपने बनाए गए ग्रुप्स में सदस्यों को देख सकते हैं, जोड़ सकते हैं, अपडेट कर सकते हैं और हटा सकते हैं।
+
+## 2. Folder/File Changes (फ़ोल्डर/फ़ाइल बदलाव)
+* **English**:
+  - **Modified** [models.py](file:///d:/demo_SES/backend/expenses/models.py): Added `Member` model related to `Group`.
+  - **Modified** [forms.py](file:///d:/demo_SES/backend/expenses/forms.py): Added `MemberForm` with duplicate check and name length validations.
+  - **Modified** [views.py](file:///d:/demo_SES/backend/expenses/views.py): Added `member_list_view`, `member_create_view`, `member_update_view`, `member_delete_view`.
+  - **Modified** [urls.py](file:///d:/demo_SES/backend/expenses/urls.py): Added URL patterns for member management.
+  - **Modified** [group_list.html](file:///d:/demo_SES/backend/expenses/templates/expenses/group_list.html): Added a "Members" button to the action columns.
+  - **Created** [member_list.html](file:///d:/demo_SES/backend/expenses/templates/expenses/member_list.html): Layout displaying members table.
+  - **Created** [member_create.html](file:///d:/demo_SES/backend/expenses/templates/expenses/member_create.html): Add member form.
+  - **Created** [member_update.html](file:///d:/demo_SES/backend/expenses/templates/expenses/member_update.html): Update details form.
+  - **Created** [member_delete.html](file:///d:/demo_SES/backend/expenses/templates/expenses/member_delete.html): Confirmation page.
+  - **Modified** [tests.py](file:///d:/demo_SES/backend/expenses/tests.py): Added unit tests for member CRUD.
+* **Hindi**:
+  - **Modified** [models.py](file:///d:/demo_SES/backend/expenses/models.py): `Member` मॉडल बनाया जिसका सम्बन्ध `Group` से है।
+  - **Modified** [forms.py](file:///d:/demo_SES/backend/expenses/forms.py): `MemberForm` बनाया जिसमें यूनिक नाम और लेंथ वैलिडेशन है।
+  - **Modified** [views.py](file:///d:/demo_SES/backend/expenses/views.py): CRUD ऑपरेशन्स के व्यूज़ बनाए।
+  - **Modified** [urls.py](file:///d:/demo_SES/backend/expenses/urls.py): मेंबर्स के लिए यूआरएल राउट्स जोड़े।
+  - **Modified** [group_list.html](file:///d:/demo_SES/backend/expenses/templates/expenses/group_list.html): ग्रुप लिस्ट टेबल में "Members" बटन जोड़ा।
+  - **Created** [member_list.html](file:///d:/demo_SES/backend/expenses/templates/expenses/member_list.html) बनाया: मेंबर्स लिस्ट दिखाने वाला पेज।
+  - **Created** [member_create.html](file:///d:/demo_SES/backend/expenses/templates/expenses/member_create.html) बनाया: नया मेंबर जोड़ने का फॉर्म।
+  - **Created** [member_update.html](file:///d:/demo_SES/backend/expenses/templates/expenses/member_update.html) बनाया: मेंबर की डिटेल्स अपडेट करने का फॉर्म।
+  - **Created** [member_delete.html](file:///d:/demo_SES/backend/expenses/templates/expenses/member_delete.html) बनाया: मेंबर को हटाने का कन्फर्मेशन पेज।
+  - **Modified** [tests.py](file:///d:/demo_SES/backend/expenses/tests.py): मेंबर्स CRUD के ऑटोमेटेड टेस्ट्स लिखे।
+
+## 3. Database Changes (डेटाबेस बदलाव)
+* **English**:
+  - Created a table `expenses_member` with fields `group_id` (ForeignKey), `name` (CharField), `email` (EmailField), `phone` (CharField), and `created_at` (DateTimeField).
+  - Added unique constraint on `(group_id, name)` so duplicate names cannot exist within the same group.
+* **Hindi**:
+  - `expenses_member` नामक नई टेबल बनाई जिसमें `group_id` (फॉरेन की), `name`, `email`, `phone`, और `created_at` फ़ील्ड्स हैं।
+  - `(group_id, name)` पर यूनिक कन्सट्रेंट लगाया ताकि एक ही ग्रुप में दो मेंबर्स का नाम सेम न हो सके।
+
+## 4. Django Concepts Used (जैंगो अवधारणाएं)
+* **English**:
+  - **ForeignKey**: Represents a one-to-many relationship (one group contains multiple members).
+  - **unique_together**: Ensures the combinations of fields are completely unique in the database.
+  - **Custom Form Initialization**: Passing dynamic arguments to standard forms to validate data contextually.
+  - **Access Control**: Filtering by `created_by=request.user` to secure private group resources.
+* **Hindi**:
+  - **ForeignKey**: वन-टू-मेनी सम्बन्ध बनाने के लिए (एक ग्रुप में कई सदस्य होते हैं)।
+  - **unique_together**: दो फ़ील्ड्स के कॉम्बिनेशन को डेटाबेस में यूनिक रखने के लिए।
+  - **Custom Form Initialization**: फॉर्म क्लास में अतिरिक्त डेटा (जैसे ग्रुप ऑब्जेक्ट) भेजकर डायनेमिक वैलिडेशन करना।
+  - **Access Control**: `created_by=request.user` की जांच करना ताकि कोई यूज़र दूसरों के ग्रुप का डेटा न बदल सके।
+
+## 5. CRUD Flow (क्रूड फ्लो)
+* **English**:
+  - **Create**: Enter details -> backend validates if name is unique in that group -> saves row in SQLite.
+  - **Read**: Query members filtered by group ID -> displays in responsive HTML table.
+  - **Update**: Click edit -> prepopulates existing instance in Form -> saves changes after validation.
+  - **Delete**: Click remove -> confirm on warning page -> deletes member from database.
+* **Hindi**:
+  - **Create**: डिटेल्स डालें -> बैकएंड देखता है कि नाम ग्रुप में यूनिक है या नहीं -> SQLite डेटाबेस में सेव करता है।
+  - **Read**: ग्रुप आईडी के अनुसार मेंबर्स को डेटाबेस से निकालता है -> बूटस्ट्रैप टेबल में दिखाता है।
+  - **Update**: एडिट पर क्लिक करें -> पुराना डेटा फॉर्म में भर जाता है -> वैलिडेट होने पर सेव होता है।
+  - **Delete**: रिमूव पर क्लिक करें -> चेतावनी पेज पर जाएँ -> कन्फर्म करने पर डेटाबेस से हट जाता है।
+
+## 6. Commands Used (कमांड्स जिनका उपयोग किया गया)
+* **English**:
+  - Create migration file: `python manage.py makemigrations`
+  - Apply database changes: `python manage.py migrate`
+  - Run all tests: `python manage.py test expenses`
+* **Hindi**:
+  - माइग्रेशन फाइल बनाने के लिए: `python manage.py makemigrations`
+  - बदलाव डेटाबेस में लागू करने के लिए: `python manage.py migrate`
+  - टेस्ट्स रन करने के लिए: `python manage.py test expenses`
+
+## 7. Common Mistakes (आम गलतियां)
+* **English**:
+  - Not passing `group` during `MemberForm` instantiation in views, which skips the duplicate member name validation check.
+  - Failing to restrict group access, which allows any logged-in user to see or manage members of someone else's group.
+* **Hindi**:
+  - व्यूज़ में `MemberForm` बनाते समय `group` पास न करना, जिससे डुप्लीकेट नाम की जांच नहीं हो पाती।
+  - ग्रुप क्वेरी में `created_by=request.user` न लगाना, जिससे कोई भी यूज़र दूसरों के ग्रुप के मेंबर्स बदल सकता है।
+
+## 8. Best Practices (सर्वोत्तम प्रथाएं)
+* **English**:
+  - Run case-insensitive comparisons during uniqueness check using `name__iexact`.
+  - Use `get_object_or_404` for resource authorization check to avoid leaking resource existence.
+  - Write unit tests for both valid data submission and incorrect validation scenarios.
+* **Hindi**:
+  - यूज़रनेम की तुलना केस-इन्सेंसिटिव (`name__iexact`) तरीके से करें ताकि 'Amit' और 'amit' को एक माना जाए।
+  - ग्रुप एक्सेस चेक करने के लिए `get_object_or_404` का उपयोग करें ताकि अनधिकृत यूज़र्स को सीधे 404 एरर मिले।
+  - सफल एंट्रीज और वैलिडेशन एरर्स दोनों के लिए ऑटोमेटेड यूनिट टेस्ट्स लिखें।
+
+## 9. Viva Questions & Answers (वाइवा प्रश्न और उत्तर)
+
+1. **Question**: What does the `on_delete=models.CASCADE` rule do for a ForeignKey?
+   * **Answer**: If the parent record (e.g. Group) is deleted, all the related child records (e.g. Members) are automatically deleted by Django.
+   * **Hindi Answer**: यदि पैरेंट रिकॉर्ड (जैसे ग्रुप) को डिलीट किया जाता है, तो उससे जुड़े सभी चाइल्ड रिकॉर्ड्स (जैसे मेंबर्स) अपने आप डिलीट हो जाते हैं।
+
+2. **Question**: How did you prevent duplicate member names within the same group?
+   * **Answer**: By adding `unique_together = ('group', 'name')` in the `Member` model's Meta block and verifying name existence inside `MemberForm.clean_name`.
+   * **Hindi Answer**: `Member` मॉडल के मेटा क्लास में `unique_together = ('group', 'name')` जोड़कर और `MemberForm` के `clean_name` मेथड में नाम की उपलब्धता चेक करके।
+
+3. **Question**: What is the difference between `Form` and `ModelForm` in Django?
+   * **Answer**: `ModelForm` automatically generates fields and default validation logic from an existing model schema, while `Form` requires manually declaring fields.
+   * **Hindi Answer**: `ModelForm` सीधे एक मॉडल से जुड़ा होता है और फ़ील्ड्स को ऑटोमैटिक जनरेट करता है, जबकि `Form` में हमें सारे इनपुट फ़ील्ड्स खुद लिखने पड़ते हैं।
+
+4. **Question**: Why did we override `__init__` in the `MemberForm`?
+   * **Answer**: We did this to accept the current `group` object as an argument from the view, allowing us to perform unique name validation specifically for that group.
+   * **Hindi Answer**: व्यू से एक्टिव `group` ऑब्जेक्ट प्राप्त करने के लिए ताकि हम उसी ग्रुप के मेंबर्स के नामों में डुप्लीकेसी की जांच कर सकें।
+
+5. **Question**: How does `get_object_or_404` enhance security in our member CRUD views?
+   * **Answer**: By querying with both primary key and owner (`created_by=request.user`), it automatically throws a 404 error if an unauthorized user attempts to manage members in a group they did not create.
+   * **Hindi Answer**: क्वेरी में `created_by=request.user` फ़िल्टर जोड़कर यह सुनिश्चित करता है कि दूसरों के ग्रुप को एक्सेस करने पर 404 एरर आ जाए और डेटा लीक न हो।
+
+6. **Question**: What does the `iexact` field lookup option do?
+   * **Answer**: It performs a case-insensitive match (e.g., matching "ALICE", "Alice", and "alice" identically).
+   * **Hindi Answer**: यह केस-इन्सेंसिटिव मैच करता है, जिससे बड़े और छोटे अक्षरों (जैसे Amit और amit) का अंतर समाप्त हो जाता है।
+
+7. **Question**: Why is `csrf_token` required in HTML forms?
+   * **Answer**: It prevents Cross-Site Request Forgery attacks by injecting a secure token that Django validates with every POST request.
+   * **Hindi Answer**: यह क्रॉस-साइट रिक्वेस्ट फोर्जरी हमलों से बचाता है। जैंगो हर POST रिक्वेस्ट में इस टोकन की वैधता की जांच करता है।
+
+8. **Question**: How do you display validation errors on a form field in Django HTML templates?
+   * **Answer**: We check if `field.errors` exists and loop through or render it directly as `{{ field.errors }}` within the template.
+   * **Hindi Answer**: हम टेम्पलेट में `field.errors` की जांच करते हैं और एरर्स होने पर `{{ field.errors }}` द्वारा उन्हें यूजर को दिखाते हैं।
+
+9. **Question**: What does `commit=False` do when saving a model form?
+   * **Answer**: It returns an unsaved model instance, allowing you to modify or add additional values (like the group relationship) before saving it to the database.
+   * **Hindi Answer**: यह डेटाबेस में तुरंत सेव किए बिना ऑब्जेक्ट देता है, जिससे हम सेव करने से पहले उसमें ग्रुप या अन्य डेटा मैन्युअली जोड़ सकें।
+
+10. **Question**: How do you run tests only for a specific app in Django?
+    * **Answer**: By running the test command followed by the app name, for example: `python manage.py test expenses`.
+    * **Hindi Answer**: `python manage.py test` के आगे ऐप का नाम लिखकर, जैसे `python manage.py test expenses`।
+
+
+
 
 

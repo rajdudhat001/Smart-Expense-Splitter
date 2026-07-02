@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from django.db import IntegrityError
 from django.urls import reverse
 from datetime import date
-from .models import Group, Expense, ExpenseSplit, Settlement, Budget
+from .models import Group, Expense, ExpenseSplit, Settlement, Budget, Member
 
 class ModelTests(TestCase):
     def setUp(self):
@@ -198,3 +198,272 @@ class AuthenticationTests(TestCase):
         self.client.login(username=self.username, password=self.password)
         response = self.client.post(self.logout_url)
         self.assertRedirects(response, self.login_url)
+
+
+class GroupCRUDTests(TestCase):
+    def setUp(self):
+        # Create users
+        self.user1 = User.objects.create_user(username='alice', email='alice@example.com', password='password123')
+        self.user2 = User.objects.create_user(username='bob', email='bob@example.com', password='password123')
+
+        # Create a group owned by alice
+        self.group = Group.objects.create(
+            name='Alice Goa Trip',
+            description='Trip to Goa funded by Alice',
+            created_by=self.user1
+        )
+        self.group.members.add(self.user1)
+
+        # URLs
+        self.list_url = reverse('group_list')
+        self.create_url = reverse('group_create')
+        self.update_url = reverse('group_update', args=[self.group.pk])
+        self.delete_url = reverse('group_delete', args=[self.group.pk])
+        self.login_url = reverse('login')
+
+    def test_group_pages_require_login(self):
+        """Verify unauthenticated users cannot access any group pages."""
+        # List page
+        response = self.client.get(self.list_url)
+        self.assertRedirects(response, f"{self.login_url}?next={self.list_url}")
+
+        # Create page GET/POST
+        response = self.client.get(self.create_url)
+        self.assertRedirects(response, f"{self.login_url}?next={self.create_url}")
+
+        response = self.client.post(self.create_url, data={'name': 'New Group'})
+        self.assertRedirects(response, f"{self.login_url}?next={self.create_url}")
+
+        # Update page GET/POST
+        response = self.client.get(self.update_url)
+        self.assertRedirects(response, f"{self.login_url}?next={self.update_url}")
+
+        response = self.client.post(self.update_url, data={'name': 'Updated Group'})
+        self.assertRedirects(response, f"{self.login_url}?next={self.update_url}")
+
+        # Delete page GET/POST
+        response = self.client.get(self.delete_url)
+        self.assertRedirects(response, f"{self.login_url}?next={self.delete_url}")
+
+        response = self.client.post(self.delete_url)
+        self.assertRedirects(response, f"{self.login_url}?next={self.delete_url}")
+
+    def test_group_list_only_shows_owned_groups(self):
+        """Verify logged-in user only sees the groups they created."""
+        # Log in as Alice (creator of Alice Goa Trip)
+        self.client.login(username='alice', password='password123')
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Alice Goa Trip')
+
+        # Log in as Bob (who has no groups)
+        self.client.login(username='bob', password='password123')
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Alice Goa Trip')
+
+    def test_group_create_success(self):
+        """Verify creating a group works, sets owner and member, and redirects."""
+        self.client.login(username='bob', password='password123')
+        payload = {
+            'name': 'Bob Party Group',
+            'description': 'Party weekend description'
+        }
+        response = self.client.post(self.create_url, data=payload)
+        self.assertRedirects(response, self.list_url)
+        
+        # Verify database creation
+        new_group = Group.objects.get(name='Bob Party Group')
+        self.assertEqual(new_group.created_by, self.user2)
+        self.assertIn(self.user2, new_group.members.all())
+
+    def test_group_create_validation_error(self):
+        """Verify validation fails if group name is too short."""
+        self.client.login(username='bob', password='password123')
+        payload = {
+            'name': 'B',  # too short
+            'description': 'Short name'
+        }
+        response = self.client.post(self.create_url, data=payload)
+        self.assertEqual(response.status_code, 200)
+        form = response.context['form']
+        self.assertFalse(form.is_valid())
+        self.assertIn('name', form.errors)
+        self.assertIn("Group name must be at least 3 characters long.", form.errors['name'][0])
+
+    def test_group_update_success(self):
+        """Verify group creator can update details."""
+        self.client.login(username='alice', password='password123')
+        payload = {
+            'name': 'Alice Goa Trip V2',
+            'description': 'Updated description text'
+        }
+        response = self.client.post(self.update_url, data=payload)
+        self.assertRedirects(response, self.list_url)
+        
+        # Verify db updates
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.name, 'Alice Goa Trip V2')
+        self.assertEqual(self.group.description, 'Updated description text')
+
+    def test_group_update_and_delete_unauthorized(self):
+        """Verify non-creator gets 404 when editing or deleting group."""
+        self.client.login(username='bob', password='password123')
+        
+        # Edit GET/POST
+        response = self.client.get(self.update_url)
+        self.assertEqual(response.status_code, 404)
+
+        response = self.client.post(self.update_url, data={'name': 'Hacked Group'})
+        self.assertEqual(response.status_code, 404)
+
+        # Delete GET/POST
+        response = self.client.get(self.delete_url)
+        self.assertEqual(response.status_code, 404)
+
+        response = self.client.post(self.delete_url)
+        self.assertEqual(response.status_code, 404)
+        
+        # Verify group is not deleted
+        self.assertTrue(Group.objects.filter(pk=self.group.pk).exists())
+
+    def test_group_delete_success(self):
+        """Verify group creator can delete group."""
+        self.client.login(username='alice', password='password123')
+        response = self.client.post(self.delete_url)
+        self.assertRedirects(response, self.list_url)
+        # Verify database record is gone
+        self.assertFalse(Group.objects.filter(pk=self.group.pk).exists())
+
+
+class MemberCRUDTests(TestCase):
+    def setUp(self):
+        # Create users
+        self.user1 = User.objects.create_user(username='alice', email='alice@example.com', password='password123')
+        self.user2 = User.objects.create_user(username='bob', email='bob@example.com', password='password123')
+
+        # Create groups
+        self.group = Group.objects.create(
+            name='Alice Goa Trip',
+            description='Trip to Goa funded by Alice',
+            created_by=self.user1
+        )
+        self.group.members.add(self.user1)
+
+        self.member = Member.objects.create(
+            group=self.group,
+            name='John Doe',
+            email='john@example.com',
+            phone='1234567890'
+        )
+
+        # URLs
+        self.list_url = reverse('member_list', args=[self.group.pk])
+        self.create_url = reverse('member_create', args=[self.group.pk])
+        self.update_url = reverse('member_update', args=[self.group.pk, self.member.pk])
+        self.delete_url = reverse('member_delete', args=[self.group.pk, self.member.pk])
+        self.login_url = reverse('login')
+
+    def test_member_pages_require_login(self):
+        """Verify unauthenticated users cannot access member pages."""
+        # List
+        response = self.client.get(self.list_url)
+        self.assertRedirects(response, f"{self.login_url}?next={self.list_url}")
+
+        # Create GET/POST
+        response = self.client.get(self.create_url)
+        self.assertRedirects(response, f"{self.login_url}?next={self.create_url}")
+
+        response = self.client.post(self.create_url, data={'name': 'Jane Doe'})
+        self.assertRedirects(response, f"{self.login_url}?next={self.create_url}")
+
+        # Update GET/POST
+        response = self.client.get(self.update_url)
+        self.assertRedirects(response, f"{self.login_url}?next={self.update_url}")
+
+        response = self.client.post(self.update_url, data={'name': 'John Doe Updated'})
+        self.assertRedirects(response, f"{self.login_url}?next={self.update_url}")
+
+        # Delete GET/POST
+        response = self.client.get(self.delete_url)
+        self.assertRedirects(response, f"{self.login_url}?next={self.delete_url}")
+
+        response = self.client.post(self.delete_url)
+        self.assertRedirects(response, f"{self.login_url}?next={self.delete_url}")
+
+    def test_member_pages_unauthorized(self):
+        """Verify non-creator of group cannot access group member management pages."""
+        self.client.login(username='bob', password='password123')
+
+        # List
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, 404)
+
+        # Create
+        response = self.client.post(self.create_url, data={'name': 'Jane'})
+        self.assertEqual(response.status_code, 404)
+
+        # Update
+        response = self.client.post(self.update_url, data={'name': 'Jane'})
+        self.assertEqual(response.status_code, 404)
+
+        # Delete
+        response = self.client.post(self.delete_url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_member_list_success(self):
+        """Verify creator can view member list."""
+        self.client.login(username='alice', password='password123')
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'expenses/member_list.html')
+        self.assertContains(response, 'John Doe')
+
+    def test_member_create_success(self):
+        """Verify creator can add a member to the group."""
+        self.client.login(username='alice', password='password123')
+        payload = {
+            'name': 'Jane Smith',
+            'email': 'jane@example.com',
+            'phone': '9876543210'
+        }
+        response = self.client.post(self.create_url, data=payload)
+        self.assertRedirects(response, self.list_url)
+        self.assertTrue(Member.objects.filter(name='Jane Smith', group=self.group).exists())
+
+    def test_member_create_duplicate_validation(self):
+        """Verify duplicate member names within the same group are prevented."""
+        self.client.login(username='alice', password='password123')
+        payload = {
+            'name': 'John Doe',  # Case-insensitive duplicate check
+            'email': 'john2@example.com',
+        }
+        response = self.client.post(self.create_url, data=payload)
+        self.assertEqual(response.status_code, 200)
+        form = response.context['form']
+        self.assertFalse(form.is_valid())
+        self.assertIn('name', form.errors)
+        self.assertIn("A member with this name already exists in this group.", form.errors['name'][0])
+
+    def test_member_update_success(self):
+        """Verify creator can update member details."""
+        self.client.login(username='alice', password='password123')
+        payload = {
+            'name': 'John Updated',
+            'email': 'updated@example.com',
+            'phone': '1112223333'
+        }
+        response = self.client.post(self.update_url, data=payload)
+        self.assertRedirects(response, self.list_url)
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.name, 'John Updated')
+        self.assertEqual(self.member.email, 'updated@example.com')
+
+    def test_member_delete_success(self):
+        """Verify creator can remove a member."""
+        self.client.login(username='alice', password='password123')
+        response = self.client.post(self.delete_url)
+        self.assertRedirects(response, self.list_url)
+        self.assertFalse(Member.objects.filter(pk=self.member.pk).exists())
+
+

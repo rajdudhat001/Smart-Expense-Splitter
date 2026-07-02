@@ -61,3 +61,22 @@ class Budget(models.Model):
         return f"Personal budget of {self.amount_limit:.2f} for {self.user.username}"
 
 
+class Member(models.Model):
+    """
+    Model representing a member of a group.
+    Each member belongs to exactly one group.
+    """
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='group_members')
+    name = models.CharField(max_length=100)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=15, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('group', 'name')
+
+    def __str__(self):
+        return f"{self.name} in {self.group.name}"
+
+
+
