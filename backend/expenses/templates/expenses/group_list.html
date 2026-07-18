@@ -37,36 +37,40 @@
                                 {% if group.description %}
                                     {{ group.description|truncatechars:50 }}
                                 {% else %}
-                                    <span class="fst-italic" style="color: #4b5563;">No description / कोई विवरण नहीं</span>
+                                    <span class="fst-italic" style="color: #4b5563;">No description</span>
                                 {% endif %}
                             </td>
                             <td style="padding: 1rem; color: var(--text-secondary); font-size: 0.85rem;">{{ group.created_at|date:"M d, Y" }}</td>
                             <td style="padding: 1rem; text-align: center;">
-                                <div class="d-flex justify-content-center gap-2">
-                                    <a href="{% url 'expense_list' group.pk %}" class="btn btn-sm btn-outline-info" style="border-color: rgba(6, 182, 212, 0.4); color: #22d3ee; padding: 0.35rem 0.75rem; font-size: 0.85rem; border-radius: 6px; transition: var(--transition); text-decoration: none;">
+                                <div class="d-flex justify-content-center gap-1 flex-wrap">
+                                    <a href="{% url 'expense_list' group.pk %}" class="btn btn-sm btn-outline-info" style="border-color: rgba(6, 182, 212, 0.4); color: #22d3ee; padding: 0.35rem 0.65rem; font-size: 0.8rem; border-radius: 6px; transition: var(--transition); text-decoration: none;">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right: 3px;">
                                             <line x1="12" y1="1" x2="12" y2="23"></line>
                                             <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
                                         </svg>
                                         Expenses
                                     </a>
-                                    <a href="{% url 'member_list' group.pk %}" class="btn btn-sm btn-outline-success" style="border-color: rgba(16, 185, 129, 0.4); color: #34d399; padding: 0.35rem 0.75rem; font-size: 0.85rem; border-radius: 6px; transition: var(--transition); text-decoration: none;">
+                                    <a href="{% url 'balance_dashboard' group.pk %}" class="btn btn-sm btn-outline-warning" style="border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; padding: 0.35rem 0.65rem; font-size: 0.8rem; border-radius: 6px; transition: var(--transition); text-decoration: none;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right: 3px;">
+                                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                        </svg>
+                                        Balances
+                                    </a>
+                                    <a href="{% url 'member_list' group.pk %}" class="btn btn-sm btn-outline-success" style="border-color: rgba(16, 185, 129, 0.4); color: #34d399; padding: 0.35rem 0.65rem; font-size: 0.8rem; border-radius: 6px; transition: var(--transition); text-decoration: none;">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right: 3px;">
                                             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                                             <circle cx="9" cy="7" r="4"></circle>
-                                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                                         </svg>
                                         Members
                                     </a>
-                                    <a href="{% url 'group_update' group.pk %}" class="btn btn-sm btn-outline-primary" style="border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc; padding: 0.35rem 0.75rem; font-size: 0.85rem; border-radius: 6px; transition: var(--transition); text-decoration: none;">
+                                    <a href="{% url 'group_update' group.pk %}" class="btn btn-sm btn-outline-primary" style="border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc; padding: 0.35rem 0.65rem; font-size: 0.8rem; border-radius: 6px; transition: var(--transition); text-decoration: none;">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right: 3px;">
                                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                             <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                         </svg>
                                         Edit
                                     </a>
-                                    <a href="{% url 'group_delete' group.pk %}" class="btn btn-sm btn-outline-danger" style="border-color: rgba(239, 68, 68, 0.4); color: #f87171; padding: 0.35rem 0.75rem; font-size: 0.85rem; border-radius: 6px; transition: var(--transition); text-decoration: none;">
+                                    <a href="{% url 'group_delete' group.pk %}" class="btn btn-sm btn-outline-danger" style="border-color: rgba(239, 68, 68, 0.4); color: #f87171; padding: 0.35rem 0.65rem; font-size: 0.8rem; border-radius: 6px; transition: var(--transition); text-decoration: none;">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right: 3px;">
                                             <polyline points="3 6 5 6 21 6"></polyline>
                                             <path d="M19 6v14a2 2 0 0 1-2-2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -88,7 +92,7 @@
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
                 <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
-            <h4 style="color: #fff; font-weight: 600; margin-bottom: 0.5rem;">No groups found! / कोई ग्रुप नहीं मिला!</h4>
+            <h4 style="color: #fff; font-weight: 600; margin-bottom: 0.5rem;">No groups found!</h4>
             <p style="color: var(--text-secondary); max-width: 400px; margin: 0 auto 1.5rem;">
                 You haven't created any expense splitting groups yet. Create a new group to start adding expenses.
             </p>

@@ -29,15 +29,15 @@ class Expense(models.Model):
 
 class ExpenseSplit(models.Model):
     expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name='splits')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='splits_owed')
+    member = models.ForeignKey('Member', on_delete=models.CASCADE, related_name='splits_owed')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     is_settled = models.BooleanField(default=False)
 
     class Meta:
-        unique_together = ('expense', 'user')
+        unique_together = ('expense', 'member')
 
     def __str__(self):
-        return f"{self.user.username} owes {self.amount:.2f} for {self.expense.title}"
+        return f"{self.member.name} owes {self.amount:.2f} for {self.expense.title}"
 
 
 class Settlement(models.Model):
@@ -46,14 +46,14 @@ class Settlement(models.Model):
         ('completed', 'Completed'),
     ]
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='settlements')
-    payer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='settlements_sent')
-    payee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='settlements_received')
+    payer = models.ForeignKey('Member', on_delete=models.CASCADE, related_name='settlements_sent')
+    payee = models.ForeignKey('Member', on_delete=models.CASCADE, related_name='settlements_received')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     date = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='completed')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
 
     def __str__(self):
-        return f"{self.payer.username} paid {self.payee.username} {self.amount:.2f} in {self.group.name}"
+        return f"{self.payer.name} paid {self.payee.name} {self.amount:.2f} in {self.group.name}"
 
 class Budget(models.Model):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='budgets', null=True, blank=True)
@@ -73,6 +73,7 @@ class Member(models.Model):
     Each member belongs to exactly one group.
     """
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='group_members')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='group_memberships')
     name = models.CharField(max_length=100)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=15, blank=True)
@@ -83,6 +84,26 @@ class Member(models.Model):
 
     def __str__(self):
         return f"{self.name} in {self.group.name}"
+
+
+class Invitation(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('declined', 'Declined'),
+    ]
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='invitations')
+    email = models.EmailField()
+    invited_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_invitations')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('group', 'email')
+
+    def __str__(self):
+        return f"Invite for {self.email} to {self.group.name}"
+
 
 
 

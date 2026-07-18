@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from .models import Group, Member, Expense
+from .models import Group, Member, Expense, Settlement
 
 
 class UserRegistrationForm(forms.ModelForm):
@@ -41,7 +41,7 @@ class UserRegistrationForm(forms.ModelForm):
         """
         email = self.cleaned_data.get('email')
         if User.objects.filter(email=email).exists():
-            raise ValidationError("Email is already registered. / यह ईमेल पहले से ही रजिस्टर्ड है।")
+            raise ValidationError("Email is already registered.")
         return email
 
     def clean(self):
@@ -54,7 +54,7 @@ class UserRegistrationForm(forms.ModelForm):
 
         if password and confirm_password and password != confirm_password:
             # Raise validation error if passwords do not match
-            self.add_error('confirm_password', "Passwords do not match. / पासवर्ड मेल नहीं खाते हैं।")
+            self.add_error('confirm_password', "Passwords do not match.")
         
         return cleaned_data
 
@@ -111,7 +111,7 @@ class GroupForm(forms.ModelForm):
         """
         name = self.cleaned_data.get('name')
         if not name or len(name.strip()) < 3:
-            raise ValidationError("Group name must be at least 3 characters long. / ग्रुप का नाम कम से कम 3 अक्षरों का होना चाहिए।")
+            raise ValidationError("Group name must be at least 3 characters long.")
         return name.strip()
 
 
@@ -145,7 +145,7 @@ class MemberForm(forms.ModelForm):
     def clean_name(self):
         name = self.cleaned_data.get('name')
         if not name or len(name.strip()) < 2:
-            raise ValidationError("Member name must be at least 2 characters long. / सदस्य का नाम कम से कम 2 अक्षरों का होना चाहिए।")
+            raise ValidationError("Member name must be at least 2 characters long.")
         
         name = name.strip()
         if self.group:
@@ -155,7 +155,7 @@ class MemberForm(forms.ModelForm):
             if self.instance and self.instance.pk:
                 query = query.exclude(pk=self.instance.pk)
             if query.exists():
-                raise ValidationError("A member with this name already exists in this group. / इस ग्रुप में इस नाम का सदस्य पहले से ही मौजूद है।")
+                raise ValidationError("A member with this name already exists in this group.")
         return name
 
 
@@ -210,8 +210,67 @@ class ExpenseForm(forms.ModelForm):
     def clean_amount(self):
         amount = self.cleaned_data.get('amount')
         if amount is None or amount <= 0:
-            raise ValidationError("Expense amount must be greater than zero. / खर्चे की राशि शून्य से अधिक होनी चाहिए।")
+            raise ValidationError("Expense amount must be greater than zero.")
         return amount
+
+
+class SettlementForm(forms.ModelForm):
+    """
+    Form for creating/recording and updating Settlements.
+    Filters the payer and payee fields to show only members of the selected group.
+    """
+    class Meta:
+        model = Settlement
+        fields = ['payer', 'payee', 'amount', 'status']
+        widgets = {
+            'payer': forms.Select(attrs={'class': 'form-select'}),
+            'payee': forms.Select(attrs={'class': 'form-select'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Enter Amount', 'step': '0.01'}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        # We pass 'group' from views to filter the dropdown options
+        self.group = kwargs.pop('group', None)
+        super().__init__(*args, **kwargs)
+        if self.group:
+            members_qs = Member.objects.filter(group=self.group).order_by('name')
+            self.fields['payer'].queryset = members_qs
+            self.fields['payee'].queryset = members_qs
+
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        if amount is None or amount <= 0:
+            raise ValidationError("Settlement amount must be greater than zero.")
+        return amount
+
+    def clean(self):
+        cleaned_data = super().clean()
+        payer = cleaned_data.get('payer')
+        payee = cleaned_data.get('payee')
+        amount = cleaned_data.get('amount')
+        status = cleaned_data.get('status')
+
+        if payer and payee and payer == payee:
+            self.add_error('payee', "Payer and payee cannot be the same member.")
+
+        # Check for duplicate settlements
+        if payer and payee and amount and self.group:
+            # Exclude current settlement instance if updating
+            exclude_pk = self.instance.pk if self.instance and self.instance.pk else None
+            duplicates = Settlement.objects.filter(
+                group=self.group,
+                payer=payer,
+                payee=payee,
+                amount=amount,
+                status=status
+            )
+            if exclude_pk:
+                duplicates = duplicates.exclude(pk=exclude_pk)
+            if duplicates.exists():
+                raise ValidationError("An identical settlement record already exists.")
+        
+        return cleaned_data
 
 
 

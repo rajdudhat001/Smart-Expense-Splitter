@@ -23,6 +23,20 @@ urlpatterns = [
     path('groups/<int:group_pk>/expenses/<int:expense_pk>/', views.expense_detail_view, name='expense_detail'),
     path('groups/<int:group_pk>/expenses/<int:expense_pk>/update/', views.expense_update_view, name='expense_update'),
     path('groups/<int:group_pk>/expenses/<int:expense_pk>/delete/', views.expense_delete_view, name='expense_delete'),
+
+    # Expense Splitting URLs
+    path('groups/<int:group_pk>/expenses/<int:expense_pk>/split/', views.expense_split_view, name='expense_split'),
+    path('groups/<int:group_pk>/expenses/<int:expense_pk>/split/equal/preview/', views.equal_split_preview_view, name='equal_split_preview'),
+    path('groups/<int:group_pk>/expenses/<int:expense_pk>/split/unequal/', views.unequal_split_form_view, name='unequal_split_form'),
+    path('groups/<int:group_pk>/expenses/<int:expense_pk>/split/result/', views.split_result_view, name='split_result'),
+
+    # Settlement & Balance URLs
+    path('groups/<int:group_pk>/balance/', views.balance_dashboard_view, name='balance_dashboard'),
+    path('groups/<int:group_pk>/members/<int:member_pk>/balance/', views.member_balance_view, name='member_balance'),
+    path('groups/<int:group_pk>/settlements/', views.settlement_list_view, name='settlement_list'),
+    path('groups/<int:group_pk>/settlements/<int:settlement_pk>/', views.settlement_detail_view, name='settlement_detail'),
+    path('groups/<int:group_pk>/settlements/<int:settlement_pk>/confirm/', views.settlement_confirm_view, name='settlement_confirm'),
+    path('groups/<int:group_pk>/settlements/<int:settlement_pk>/complete/', views.settlement_complete_view, name='settlement_complete'),
 ]
 
 

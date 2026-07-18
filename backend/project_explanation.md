@@ -1001,3 +1001,432 @@ graph TD
 10. **Question**: Why is it critical to check `group.created_by == request.user` in expense views?
     * **Answer**: To prevent unauthorized users from viewing, creating, or editing expenses of groups they do not own.
     * **Hindi Answer**: यह सुरक्षा के लिए आवश्यक है ताकि कोई भी यूज़र दूसरों के ग्रुप के खर्चों को देख या बदल न सके।
+
+
+---
+---
+
+# Phase 8 – Expense Split Logic (फेज 8 - खर्च विभाजन लॉजिक)
+
+## 1. Objective (उद्देश्य)
+* **English**: The objective of this phase is to implement the core expense split engine for the Smart Expense Splitter application. This allows users to divide a group expense among members using two methods: Equal Split (automatic division with precise rounding cents distribution) and Unequal Split (manual custom amounts with sum validation).
+* **Hindi**: इस फेज का उद्देश्य स्मार्ट एक्सपेंस स्प्लिटर एप्लिकेशन के लिए मुख्य खर्च विभाजन प्रणाली (Expense Split Logic) को लागू करना है। यह यूज़र्स को दो तरीकों से ग्रुप के खर्चों को बांटने की सुविधा देता है: बराबर बँवारा (Equal Split - सटीक राउंडिंग के साथ आटोमेटिक बँवारा) और कस्टम बँवारा (Unequal Split - मैन्युअल रूप से राशियों को दर्ज करना और उनके सही योग की जांच करना)।
+
+---
+
+## 2. Folder/File Changes (फ़ोल्डर/फ़ाइल में बदलाव)
+
+### Created Files (बनाई गई नई फ़ाइलें):
+1. **`expenses/templates/expenses/expense_split.html`**:
+   * **English**: Select split method (Equal vs Unequal) and check group members who participate.
+   * **Hindi**: विभाजन विधि (बराबर या कस्टम) चुनने और इसमें भाग लेने वाले ग्रुप मेंबर्स को सेलेक्ट करने के लिए स्क्रीन।
+2. **`expenses/templates/expenses/equal_split_preview.html`**:
+   * **English**: Shows the preview of automatically calculated equal division with rounding cents adjustments.
+   * **Hindi**: यह स्क्रीन प्रत्येक मेंबर के बराबर हिस्से (सटीक राउंडिंग के साथ) को दिखाता है और सेव करने की पुष्टि करता है।
+3. **`expenses/templates/expenses/unequal_split_form.html`**:
+   * **English**: Custom inputs form for each member, showing live validation total and remaining amounts.
+   * **Hindi**: प्रत्येक चुने हुए मेंबर के लिए कस्टम हिस्सा दर्ज करने का फॉर्म, जिसमें लाइव जोड़ और शेष राशि की गणना भी शामिल है।
+4. **`expenses/templates/expenses/split_result.html`**:
+   * **English**: Displays the final saved split details for the expense.
+   * **Hindi**: सहेजे गए खर्च विभाजन का अंतिम परिणाम दिखाने वाला पेज।
+
+### Modified Files (बदली गई फ़ाइलें):
+1. **`expenses/urls.py`**:
+   * **English**: Defined routes for the split steps and results.
+   * **Hindi**: विभाजन के चरणों और परिणाम के लिए यूआरएल (URL) रूट्स को जोड़ा गया।
+2. **`expenses/views.py`**:
+   * **English**: Implemented views for equal/unequal split flows, session management, rounding algorithms, and database saving.
+   * **Hindi**: विभाजन लॉजिक, राउंडिंग एल्गोरिदम, इनपुट सत्यापन और डेटाबेस में सुरक्षित करने के व्यूज़ (Views) को लागू किया गया।
+3. **`expenses/templates/expenses/expense_detail.html`**:
+   * **English**: Added "Split Expense" action button and a table rendering existing splits if they exist.
+   * **Hindi**: खर्चे के विवरण वाले पेज में "Split Expense" बटन और पहले से विभाजित खर्चों की टेबल जोड़ी गई।
+4. **`expenses/tests.py`**:
+   * **English**: Added unit tests validating splits view rendering, validation boundaries, and correctness of mathematical splits.
+   * **Hindi**: विभाजन के सुरक्षा नियमों, गणितीय शुद्धता और इनपुट एरर्स की जांच करने के लिए टेस्ट केसेस लिखे गए।
+
+---
+
+## 3. Database Changes (डेटाबेस बदलाव)
+* **English**: No new models were introduced. We utilize the existing `ExpenseSplit` model created in Phase 3. The `ExpenseSplit` model links an `Expense` to a Django `User` and records the split `amount`.
+* **Hindi**: कोई नया मॉडल नहीं बनाया गया है। फेज 3 में बनाए गए `ExpenseSplit` मॉडल का ही उपयोग किया गया है। यह मॉडल `Expense` को `User` से जोड़ता है और प्रत्येक व्यक्ति के हिस्से का `amount` स्टोर करता है।
+
+---
+
+## 4. Split Logic & Algorithms Explanation (स्प्लिट लॉजिक और एल्गोरिदम)
+
+### A. Equal Split Algorithm (बराबर बँवारे का एल्गोरिदम)
+* **English**:
+  1. Let $A$ be the total expense amount, and $N$ be the number of selected members.
+  2. Compute base share: $B = \text{floor}(A / N)$ rounded down to 2 decimal places.
+  3. Calculate the sum of these base shares: $S = B \times N$.
+  4. Find the remainder cents: $R = (A - S) \times 100$.
+  5. Distribute $R$ cents by adding $0.01$ to the share of the first $R$ selected members.
+* **Hindi**:
+  1. मान लीजिए कुल खर्च राशि $A$ है, और चुने गए सदस्यों की संख्या $N$ है।
+  2. मूल हिस्सा निकालें: $B = \text{floor}(A / N)$ दशमलव के 2 स्थानों तक।
+  3. मूल हिस्से का कुल योग निकालें: $S = B \times N$।
+  4. शेष पैसे (cents) निकालें: $R = (A - S) \times 100$।
+  5. पहले $R$ सदस्यों के हिस्से में $0.01$ जोड़कर बचे हुए पैसे बांटें।
+
+### B. Unequal Split Algorithm (कस्टम बँवारे का एल्गोरिदम)
+* **English**:
+  1. Retrieve the amount entered for each member from the POST request.
+  2. Check that no amount is negative ($x \ge 0$).
+  3. Sum all entered amounts: $T = \sum x_i$.
+  4. Check that $T$ matches total expense amount $A$ exactly ($|T - A| < 0.01$).
+  5. If valid, save split values. Otherwise, display error.
+* **Hindi**:
+  1. फॉर्म सबमिट होने पर हर सदस्य के लिए दर्ज की गई राशि प्राप्त करें।
+  2. जांचें कि कोई भी राशि नकारात्मक (negative) न हो ($x \ge 0$)।
+  3. सभी राशियों का योग करें: $T = \sum x_i$।
+  4. सुनिश्चित करें कि योग $T$ कुल खर्चे $A$ के बिल्कुल बराबर हो ($|T - A| < 0.01$)।
+  5. यदि योग सही है तो डेटाबेस में सेव करें, अन्यथा एरर दिखाएं।
+
+---
+
+## 5. Validation & Security Rules (वैलिडेशन और सुरक्षा नियम)
+1. **Authentication**: Only logged-in users can access split pages.
+   * *Hindi*: केवल लॉग-इन यूज़र्स ही विभाजन पेजों को खोल सकते हैं।
+2. **Authorization**: Users can only split expenses belonging to groups they created (`group.created_by == request.user`).
+   * *Hindi*: यूज़र्स केवल अपने द्वारा बनाए गए ग्रुप्स के ही खर्चे विभाजित कर सकते हैं।
+3. **Non-negativity**: Split amounts cannot be negative.
+   * *Hindi*: विभाजन राशि ऋणात्मक नहीं हो सकती।
+4. **Sum Equality**: In unequal splits, the sum of individual shares must exactly equal the total expense amount.
+   * *Hindi*: कस्टम बँवारे में सभी हिस्सों का योग मूल खर्च राशि के बिल्कुल बराबर होना चाहिए।
+5. **Session Safety**: Selected member list and methods are validated at each step using database checks to prevent URL tampering.
+   * *Hindi*: यूआरएल हैकिंग रोकने के लिए हर स्टेप पर सत्र (session) डेटा को डेटाबेस से सत्यापित किया जाता है।
+
+---
+
+## 6. Flow Diagram (फ्लो डायग्राम)
+```mermaid
+graph TD
+    A[Expense Detail Page] -->|Click Split Expense| B[Expense Split Init Page]
+    B -->|Select Members & Choose Split Method| C{Split Method?}
+    C -->|Equal Split| D[Equal Split Preview Page]
+    C -->|Unequal Split| E[Unequal Split Form Page]
+    D -->|Click Confirm & Save| F[Split Database Records]
+    E -->|Submit and Validate Matching Sum| F
+    F -->|Redirect| G[Split Result Page]
+    G -->|Click Go Back| A
+```
+
+---
+
+## 7. Commands Used (कमांड्स जिनका उपयोग किया गया)
+* `python manage.py test expenses` (Run tests/टेस्ट रन करना)
+
+---
+
+## 8. Common Mistakes (आम गलतियां)
+* **English**:
+  - Not handling rounding remainders, resulting in total splits not matching the total expense (e.g. 100 split 3 ways saving 33.33 each, leaving 0.01 missing).
+  - Forgetting to delete previous split records of an expense when resplitting, which results in duplicate database constraints errors.
+* **Hindi**:
+  - राउंडिंग से बचे हुए पैसों का ध्यान न रखना, जिससे विभाजन का कुल योग खर्च के बराबर नहीं होता (जैसे ₹100 को 3 लोगों में 33.33 बांटने पर 1 पैसा छूट जाता है)।
+  - दोबारा विभाजन करने पर पुराने रिकॉर्ड्स को न हटाना, जिससे डुप्लीकेट रिकॉर्ड एरर आता है।
+
+---
+
+## 9. Best Practices (सर्वोत्तम प्रथाएं)
+* **English**:
+  - Use `Decimal` instead of `float` for all financial calculations.
+  - Delete old splits inside a transaction block before saving new splits to ensure atomicity.
+  - Include frontend live calculations in JS to enhance UX, backed by server validation for security.
+* **Hindi**:
+  - पैसों के जोड़-घटाव के लिए हमेशा `Decimal` का उपयोग करें, `float` का नहीं।
+  - नये विभाजन को डेटाबेस में सेव करने से पहले पुराने रिकॉर्ड्स को ट्रांजैक्शन ब्लॉक में डिलीट करें।
+  - बेहतर यूज़र एक्सपीरियंस के लिए JS में लाइव योग दिखाएं और सुरक्षा के लिए बैकएंड में जांचें।
+
+---
+
+## 10. Viva / Interview Questions (वाइवा प्रश्न और उत्तर)
+
+1. **Question**: How did you handle the rounding issue when dividing an odd amount (like ₹100) among 3 members?
+   * **Answer**: We rounded down the base share to 2 decimal places (₹33.33) and computed the remainder cents (₹0.01). We then distributed the remainder cents one-by-one (in 0.01 increments) to the first members.
+   * **Hindi Answer**: हमने विभाजन राशि को राउंड डाउन करके मूल हिस्सा निकाला (₹33.33) और बचे हुए पैसे (₹0.01) को पहले मेंबर्स में एक-एक पैसा करके बांट दिया।
+
+2. **Question**: Why is it necessary to delete old splits before saving new ones?
+   * **Answer**: If a user updates or recalculates the splits for an expense, old records must be removed first because the `unique_together = ('expense', 'user')` constraint in the database would throw an integrity error if duplicate entries are saved.
+   * **Hindi Answer**: यदि यूज़र दोबारा विभाजित करता है, तो पुराने रिकॉर्ड हटाना आवश्यक है, अन्यथा डेटाबेस का `unique_together` नियम एरर देगा।
+
+3. **Question**: What happens to split records if the main expense is deleted?
+   * **Answer**: The splits are automatically deleted cascade-style because the `expense` field in `ExpenseSplit` has `on_delete=models.CASCADE`.
+   * **Hindi Answer**: `ExpenseSplit` मॉडल में `on_delete=models.CASCADE` होने के कारण मुख्य खर्च डिलीट होने पर उसके विभाजन भी खुद डिलीट हो जाते हैं।
+
+4. **Question**: How did you pass the selected members from the setup screen to the split forms?
+   * **Answer**: We stored the selected member user IDs and the split method in Django session dictionary (`request.session['split_member_ids']`).
+   * **Hindi Answer**: हमने चुने हुए सदस्यों की आईडी और विभाजन के तरीके को Django के सेशन (`request.session`) में स्टोर किया।
+
+5. **Question**: What validation rules do you apply in Unequal Split?
+   * **Answer**: We validate that all input amounts are non-negative numbers, do not exceed the total expense, and their sum exactly equals the expense amount.
+   * **Hindi Answer**: हम यह जांचते हैं कि कोई भी इनपुट राशि शून्य से कम न हो, खर्चे से अधिक न हो, और उनका कुल योग मूल खर्च राशि के बिल्कुल बराबर हो।
+
+6. **Question**: Why did you use `quantize(Decimal('0.01'))`?
+   * **Answer**: To restrict the currency value to exactly 2 decimal places to match real money.
+   * **Hindi Answer**: राशि को दशमलव के 2 स्थानों तक रखने के लिए ताकि वह रुपये-पैसे के मानक से मेल खाए।
+
+7. **Question**: Why is frontend JavaScript validation not sufficient for Unequal Split?
+   * **Answer**: Frontend validation is easily bypassed. Server-side validation is mandatory to ensure database integrity and safety.
+   * **Hindi Answer**: फ्रंटएंड वैलिडेशन को आसानी से डिसेबल किया जा सकता है, इसलिए डेटाबेस की सुरक्षा के लिए बैकएंड वैलिडेशन जरूरी है।
+
+8. **Question**: How do we check if a user is authorized to split a particular expense?
+   * **Answer**: We fetch the group with `get_object_or_404(Group, pk=group_pk, created_by=request.user)`. If the user is not the group creator, it returns a 404.
+   * **Hindi Answer**: हम व्यू में `created_by=request.user` का उपयोग करके ग्रुप फ़ेच करते हैं। यदि यूज़र निर्माता नहीं है, तो Django 404 एरर लौटाता है।
+
+9. **Question**: What is the purpose of session clearing or overwriting split data in sessions?
+   * **Answer**: Overwriting the session variables ensures that successive split actions on different expenses do not carry over stale user IDs.
+   * **Hindi Answer**: सेशन वेरिएबल्स को ओवरराइट करने से यह सुनिश्चित होता है कि पुराने खर्चे का स्प्लिट डेटा नए खर्चे के स्प्लिट में इस्तेमाल न हो।
+
+10. **Question**: What does `getlist()` do in Django's request object?
+    * **Answer**: It retrieves multiple submitted values for the same key (e.g. from multiple checkboxes with name `selected_members`).
+    * **Hindi Answer**: यह एक ही नाम के मल्टीपल इनपुट्स (जैसे चेकबॉक्स लिस्ट) से सबमिट की गई सभी वैल्यूज़ को लिस्ट के रूप में प्राप्त करता है।
+
+11. **Question**: How are members who were NOT selected in a split represented in the database?
+    * **Answer**: To fulfill the requirement that every member receives a split record, unselected group members are saved with a split amount of `0.00`.
+    * **Hindi Answer**: यह सुनिश्चित करने के लिए कि ग्रुप के प्रत्येक सदस्य के नाम पर एक रिकॉर्ड दर्ज हो, न चुने गए सदस्यों का विभाजन अमाउंट `0.00` सेव किया जाता है।
+
+12. **Question**: What is the database constraint `unique_together` doing in `ExpenseSplit`?
+    * **Answer**: It prevents a single member from having more than one split record for the same expense.
+    * **Hindi Answer**: यह यह सुनिश्चित करता है कि एक खर्चे के लिए किसी सदस्य के नाम पर एक से अधिक स्प्लिट रिकॉर्ड न बन सकें।
+
+---
+
+## Phase 8 Bug Fix: Expense Split Member Loading Logic (खर्च विभाजन सदस्य लोडिंग लॉजिक में सुधार)
+
+### 1. Root Cause of the Bug (बग का मूल कारण)
+* **English**: The "Select Members to Include" section was fetching group members using `group.members.all().order_by('username')` which queries the Django standard `User` model. However, actual group members are added as instances of the custom `Member` model and stored in the `group_members` relation. Since the group creator was the only `User` added to `group.members` at creation time, only the authenticated user was loaded on the page.
+* **Hindi**: "Select Members to Include" सेक्शन में ग्रुप मेंबर्स को `group.members.all().order_by('username')` का उपयोग करके फ़ेच किया जा रहा था, जो Django के मानक `User` मॉडल को क्वेरी करता है। जबकि, वास्तविक सदस्यों को `Member` मॉडल के रूप में जोड़ा जाता है और वे `group_members` रिलेशन में होते हैं। चूंकि ग्रुप बनाते समय केवल निर्माता को ही `group.members` में जोड़ा गया था, इसलिए पेज पर केवल वही एक यूजर दिखाई दे रहा था।
+
+### 2. Implementation & Fix details (सुधार का विवरण)
+* **English**: 
+  - Changed `ExpenseSplit` model's `user` field (pointing to `User`) to `member` (pointing to `Member`) with a unique constraint `unique_together = ('expense', 'member')`.
+  - Re-generated and ran database migrations.
+  - Updated views (`expense_split_view`, `equal_split_preview_view`, `unequal_split_form_view`, and `split_result_view`) to query and filter against `group.group_members.all()` instead of `group.members.all()`.
+  - Modified templates (`expense_split.html`, `equal_split_preview.html`, `unequal_split_form.html`, `split_result.html`, `expense_detail.html`) to display `member.name` instead of `member.username`. Added a helper check `member.name == request.user.username or member.email == request.user.email` to preserve the "You" badge indicator.
+  - Updated model and view unit tests in `tests.py` to create splits using the `Member` model.
+* **Hindi**:
+  - `ExpenseSplit` मॉडल के `user` फ़ील्ड को बदलकर `member` (`Member` मॉडल से लिंक) कर दिया गया और `unique_together = ('expense', 'member')` सेट किया गया।
+  - स्कीमा परिवर्तन को लागू करने के लिए डेटाबेस माइग्रेशन जनरेट कर रन किया गया।
+  - व्यूज़ को अपडेट किया गया ताकि यूज़र्स के बजाय ग्रुप के वास्तविक सदस्यों (`group_members`) को फ़ेच और वैलिडेट किया जा सके।
+  - टेम्पलेट्स में `member.username` के स्थान पर `member.name` का उपयोग किया गया। "You" बैज दिखाने के लिए नाम/ईमेल मिलान का लॉजिक लगाया गया।
+  - `tests.py` में लिखे गए यूनिट टेस्ट्स को नए `Member`-बेस्ड विभाजन लॉजिक के अनुसार बदला गया।
+
+---
+---
+
+# Phase 9 – Settlement & View Balance (फेज 9 - निपटान और शेष राशि)
+
+## 1. Objective (उद्देश्य)
+* **English**: The objective of this phase is to implement the Settlement and Balance Management module in the Smart Expense Splitter. This module automatically calculates who owes money to whom using a greedy debt simplification algorithm, lists member-level balances, tracks completed and pending settlements, and allows marking settlements as paid.
+* **Hindi**: इस फेज का उद्देश्य स्मार्ट एक्सपेंस स्प्लिटर में निपटान (Settlement) और शेष राशि (Balance) प्रबंधन मॉड्यूल को लागू करना है। यह मॉड्यूल आटोमेटिक रूप से एक लालची ऋण सरलीकरण एल्गोरिदम (greedy debt simplification algorithm) का उपयोग करके यह गणना करता है कि किसे किसको कितना पैसा देना है, प्रत्येक सदस्य के स्तर पर शेष राशि दिखाता है, पूर्ण और लंबित निपटान को ट्रैक करता है, और निपटानों को पूर्ण चिह्नित करने की सुविधा देता है।
+
+---
+
+## 2. Folder/File Changes (फ़ोल्डर/फ़ाइल में बदलाव)
+
+### Created Files (बनाई गई नई फ़ाइलें):
+1. **`expenses/templates/expenses/balance_dashboard.html`**:
+   - **English**: Dashboard showcasing the financial summaries for each member (Total Paid, Total Owes, Receivable, Net Balance) and dynamically displaying recommended settlements.
+   - **Hindi**: प्रत्येक सदस्य के वित्तीय सारांश (कुल भुगतान, कुल बकाया, प्राप्य राशि, शुद्ध शेष) और आटोमेटिक रूप से अनुशंसित निपटानों को प्रदर्शित करने वाला डैशबोर्ड।
+2. **`expenses/templates/expenses/member_balance.html`**:
+   - **English**: Detail page displaying a single group member's information, transaction lists (expenses paid, splits owed), and settlement payments sent or received.
+   - **Hindi**: किसी एक सदस्य की जानकारी, उनके द्वारा किए गए भुगतानों की सूची, बकाया हिस्सों की सूची और उनके द्वारा भेजे या प्राप्त किए गए निपटानों का विवरण दिखाने वाला पेज।
+3. **`expenses/templates/expenses/settlement_list.html`**:
+   - **English**: List view of completed and pending settlements with status filtering and a Django Form to manually log custom settlements.
+   - **Hindi**: पूर्ण और लंबित निपटानों को दिखाने वाला पेज, जिसमें स्थिति के अनुसार फ़िल्टर करने की सुविधा और कस्टम निपटान दर्ज करने का फॉर्म शामिल है।
+4. **`expenses/templates/expenses/settlement_detail.html`**:
+   - **English**: Detail view for a specific settlement record showing payer, payee, amount, status, date, and edit warning alerts.
+   - **Hindi**: किसी विशिष्ट निपटान रिकॉर्ड का विस्तृत विवरण दिखाने वाला पेज जिसमें भुगतानकर्ता, प्राप्तकर्ता, राशि, स्थिति, तिथि और संपादन चेतावनी अलर्ट शामिल हैं।
+5. **`expenses/templates/expenses/settlement_confirm.html`**:
+   - **English**: Confirmation form page containing safety warnings before transitioning a pending settlement's status to completed.
+   - **Hindi**: लंबित निपटान को पूर्ण चिह्नित करने से पहले पुष्टि करने वाला पेज जिसमें सुरक्षा चेतावनियाँ और सबमिशन बटन शामिल हैं।
+
+### Modified Files (बदली गई फ़ाइलें):
+1. **`expenses/models.py`**:
+   - **English**: Modified `Settlement` model: updated `payer` and `payee` from `User` to `Member`, updated default status to `'pending'`, and configured unique constraints.
+   - **Hindi**: `Settlement` मॉडल में बदलाव किया गया: भुगतानकर्ता (payer) और प्राप्तकर्ता (payee) को `User` से बदलकर `Member` से जोड़ा गया, डिफ़ॉल्ट स्थिति को `'pending'` किया गया, और सुरक्षा नियम लागू किए गए।
+2. **`expenses/forms.py`**:
+   - **English**: Implemented `SettlementForm` utilizing Django's forms framework with custom field filtering and duplicate/amount validations.
+   - **Hindi**: Django फॉर्म का उपयोग करके `SettlementForm` बनाया गया जिसमें सदस्य फ़िल्टरिंग और डुप्लीकेट/राशि का सत्यापन (validation) शामिल है।
+3. **`expenses/urls.py`**:
+   - **English**: Registered 7 new endpoints mapping settlement dashboard, member summaries, listings, manual logs, details, completions, and confirmations.
+   - **Hindi**: निपटान डैशबोर्ड, सदस्य सारांश, सूची, विवरण, पुष्टि और पूर्ण करने की क्रियाओं के लिए 7 नए यूआरएल रूट्स (routes) रजिस्टर किए गए।
+4. **`expenses/views.py`**:
+   - **English**: Added `recalculate_group_settlements` algorithm, dashboard views, individual ledger controllers, list filters, and status mutation views.
+   - **Hindi**: `recalculate_group_settlements` एल्गोरिदम, डैशबोर्ड व्यू, सदस्य लेजर, फ़िल्टर और स्थिति अपडेट करने वाले व्यूज़ (views) को जोड़ा गया।
+5. **`expenses/templates/expenses/expense_list.html`**:
+   - **English**: Added navigation link directing users to the group's Balances & Settlements dashboard.
+   - **Hindi**: खर्चे की सूची वाले पेज के हेडर में "Balances & Settlements" डैशबोर्ड पर जाने का नेविगेशन लिंक जोड़ा गया।
+6. **`expenses/templates/expenses/group_list.html`**:
+   - **English**: Inserted a "Balances" shortcut button inside the group management row actions.
+   - **Hindi**: मुख्य ग्रुप लिस्ट के प्रत्येक ग्रुप रो (row) में "Balances" पर जाने का शॉर्टकट बटन जोड़ा गया।
+
+---
+
+## 3. Database Changes (डेटाबेस बदलाव)
+* **English**: The fields `payer` and `payee` inside the `Settlement` model were altered from `ForeignKey(User)` to `ForeignKey(Member)`. The default `status` value was changed from `'completed'` to `'pending'`, and database migrations were generated and applied.
+* **Hindi**: `Settlement` मॉडल के अंदर `payer` और `payee` फ़ील्ड्स को `ForeignKey(User)` से बदलकर `ForeignKey(Member)` कर दिया गया है। डिफ़ॉल्ट स्थिति (`status`) को `'completed'` से बदलकर `'pending'` किया गया और डेटाबेस माइग्रेशन बनाकर रन किया गया।
+
+---
+
+## 4. Balance Calculation Formula (शेष राशि गणना सूत्र)
+* **English**:
+  - **Net Balance** = $(\text{Total Expense Paid} + \text{Total Completed Settlements Sent}) - (\text{Total Split Owes} + \text{Total Completed Settlements Received})$
+  - If $\text{Net Balance} > 0$: The member is owed money (Receivable = Net Balance).
+  - If $\text{Net Balance} < 0$: The member owes money (Payable = absolute value of Net Balance).
+* **Hindi**:
+  - **शुद्ध शेष (Net Balance)** = $(\text{कुल भुगतान किया गया खर्च} + \text{पूरे किए गए निपटान जो भेजे गए}) - (\text{कुल बकाया स्प्लिट} + \text{पूरे किए गए निपटान जो प्राप्त हुए})$
+  - यदि $\text{शुद्ध शेष} > 0$: सदस्य को पैसे मिलेंगे (Receivable = शुद्ध शेष)।
+  - यदि $\text{शुद्ध शेष} < 0$: सदस्य को पैसे देने होंगे (Payable = शुद्ध शेष का धनात्मक मान)।
+
+---
+
+## 5. Settlement Algorithm (निपटान एल्गोरिदम)
+* **English**:
+  We utilize a greedy simplification algorithm to clear all debts:
+  1. Calculate the Net Balance for each group member.
+  2. Separate members into `debtors` (Net Balance < 0) and `creditors` (Net Balance > 0).
+  3. Sort `debtors` in ascending order (most negative first) and `creditors` in descending order (most positive first).
+  4. While both lists are not empty, pair the largest debtor $D$ (owing $X$) with the largest creditor $C$ (owed $Y$).
+  5. Settle the amount $S = \min(X, Y)$. Recommend transaction: "$D$ should pay $S$ to $C$".
+  6. Update balances of $D$ and $C$. Remove them from active lists if their balance reaches 0.
+  7. Automatically create these recommendations as `pending` Settlements in the database, updating or deleting stale ones.
+* **Hindi**:
+  ऋणों को आसान बनाने के लिए हम एक लालची सरलीकरण एल्गोरिदम (greedy simplification algorithm) का उपयोग करते हैं:
+  1. प्रत्येक सदस्य के शुद्ध शेष (Net Balance) की गणना करें।
+  2. सदस्यों को कर्जदारों (Net Balance < 0) और लेनदारों (Net Balance > 0) में विभाजित करें।
+  3. कर्जदारों को बढ़ते क्रम में (सबसे ज्यादा कर्जदार पहले) और लेनदारों को घटते क्रम में (सबसे ज्यादा लेने वाले पहले) सॉर्ट करें।
+  4. जब तक दोनों सूचियां खाली न हों, सबसे बड़े कर्जदार $D$ (जिस पर $X$ बकाया है) और सबसे बड़े लेनदार $C$ (जिसने $Y$ पाना है) का मिलान करें।
+  5. निपटान राशि $S = \min(X, Y)$ तय करें। अनुशंसित लेनदेन: "$D$ को $C$ को $S$ राशि देनी चाहिए"।
+  6. $D$ and $C$ के शेष को अपडेट करें। यदि उनका शेष 0 हो जाता है, तो उन्हें सूची से हटा दें।
+  7. इन सिफारिशों को डेटाबेस में `pending` सेटलमेंट के रूप में आटोमेटिक सेव करें, और पुराने या अप्रासंगिक रिकॉर्ड्स को डिलीट या अपडेट करें।
+
+---
+
+## 6. Flow Diagram (फ्लो डायग्राम)
+```mermaid
+graph TD
+    A[Expense List / Group List] -->|Click Balances| B[Balance Dashboard]
+    B -->|Displays Balances & Suggested Settlements| C{Are there suggested settlements?}
+    C -->|Yes| D[Recommended: Member A owes Member B]
+    C -->|No| E[All Settled Up Status]
+    D -->|Click Mark as Completed| F[Settlement Confirm Page]
+    F -->|Click Confirm & Pay| G[Set Status to Completed]
+    G -->|Recalculate Balances| B
+    B -->|Click View Details| H[Member Balance Details]
+    B -->|Click Settlement History| I[Settlement List / History]
+    I -->|Fill Form & Submit| J[Record Custom Manual Settlement]
+    J -->|Run Validation Checks| G
+```
+
+---
+
+## 7. Validation & Security Rules (वैलिडेशन और सुरक्षा नियम)
+1. **Authentication Required**: Only logged-in users can access balance dashboards and settlements.
+   * *Hindi*: केवल लॉग-इन यूज़र्स ही शेष राशि डैशबोर्ड और निपटान पेजों को देख सकते हैं।
+2. **Group Access Restrictions**: Users can only view or manage settlements belonging to groups they created.
+   * *Hindi*: यूज़र्स केवल अपने द्वारा बनाए गए ग्रुप के ही निपटानों को देख या प्रबंधित कर सकते हैं।
+3. **Non-negativity**: Settlement amount must be greater than zero.
+   * *Hindi*: निपटान राशि शून्य से अधिक होनी चाहिए।
+4. **No Self-Settlement**: Payer and Payee must be different members.
+   * *Hindi*: भुगतानकर्ता और प्राप्तकर्ता समान नहीं हो सकते।
+5. **Finality / Immutability**: Completed settlements cannot be edited, deleted, or changed.
+   * *Hindi*: एक बार निपटान पूरा (Completed) हो जाने पर उसे बदला या हटाया नहीं जा सकता।
+6. **No Duplicates**: Handled by the database/form to prevent duplicate recordings of the exact same settlement.
+   * *Hindi*: एक ही निपटान को बार-बार सेव होने से रोकने के लिए डुप्लीकेट चेक्स लगाए गए हैं।
+
+---
+
+## 8. Commands Used (कमांड्स जिनका उपयोग किया गया)
+* `python manage.py makemigrations` (Generate database changes/डेटाबेस बदलाव माइग्रेशन बनाना)
+* `python manage.py migrate` (Apply database changes/डेटाबेस बदलाव लागू करना)
+* `python manage.py test expenses` (Run automated tests/यूनिट टेस्ट रन करना)
+
+---
+
+## 9. Common Mistakes (आम गलतियां)
+* **English**:
+  - Forgetting to filter Payer and Payee queryset in `SettlementForm` by group, which allows selecting members from other groups.
+  - Allowing users to modify or delete completed settlements, violating immutability of financial entries.
+  - Incorrect sign convention when factoring settlements back into the Net Balance calculations.
+* **Hindi**:
+  - `SettlementForm` में भुगतानकर्ता और प्राप्तकर्ता के चयन को ग्रुप के अनुसार फ़िल्टर न करना, जिससे दूसरे ग्रुप्स के सदस्य दिखने लगते हैं।
+  - यूज़र्स को पूरे हो चुके (completed) निपटानों को संपादित या डिलीट करने देना, जिससे वित्तीय लेखा-जोखा बिगड़ जाता है।
+  - शेष राशि की गणना में निपटान राशियों को जोड़ने/घटाने में गलत चिन्ह (+/-) का उपयोग करना।
+
+---
+
+## 10. Best Practices (सर्वोत्तम प्रथाएं)
+* **English**:
+  - Execute recalculation of recommended settlements dynamically inside database transactions to maintain consistency.
+  - Enforce status transitions securely by checking matching request arguments on POST.
+  - Build UI using consistent theme values from CSS variables defined in `base.html`.
+* **Hindi**:
+  - डेटा में स्थिरता बनाए रखने के लिए अनुशंसित निपटानों की गणना को डेटाबेस लेनदेन (transactions) के भीतर निष्पादित करें।
+  - सुरक्षा सुनिश्चित करने के लिए केवल पोस्ट (POST) अनुरोधों के माध्यम से ही निपटान स्थिति को अपडेट करें।
+  - `base.html` में परिभाषित CSS वेरिएबल्स का उपयोग करके थीम को एक समान रखें।
+
+---
+
+## 11. Viva / Interview Questions (वाइवा प्रश्न और उत्तर)
+
+1. **Question**: What is the purpose of the greedy simplification algorithm in settlements?
+   * **Answer**: It minimizes the total number of transactions required to settle all debts among group members.
+   * **Hindi Answer**: यह ग्रुप के सदस्यों के बीच सभी कर्जों को चुकता करने के लिए आवश्यक लेनदेन की कुल संख्या को न्यूनतम करता है।
+
+2. **Question**: Why does the `Settlement` model link to `Member` instead of `User`?
+   * **Answer**: Because group members (like Raj, Netra) do not need to register as Django users immediately. Since splits are attributed to `Member` objects, settlements must also be between `Member` objects.
+   * **Hindi Answer**: क्योंकि ग्रुप सदस्यों को तुरंत Django यूजर के रूप में रजिस्टर होने की आवश्यकता नहीं है। चूंकि स्प्लिट `Member` ऑब्जेक्ट्स पर होते हैं, इसलिए सेटलमेंट भी `Member` ऑब्जेक्ट्स के बीच होना चाहिए।
+
+3. **Question**: How is "Net Balance" calculated in Phase 9?
+   * **Answer**: Net Balance = (Total Paid as Expense + Completed Settlements Sent) - (Total Owed as Split + Completed Settlements Received).
+   * **Hindi Answer**: नेट बैलेंस = (खर्च के रूप में किया गया कुल भुगतान + भेजे गए पूरे निपटान) - (बकाया स्प्लिट + प्राप्त किए गए पूरे निपटान)।
+
+4. **Question**: How do we prevent duplicate suggested settlements in the database?
+   * **Answer**: We sync suggested settlements dynamically: check if a pending settlement exists and update its amount, create a new one if missing, and delete old pending records that are no longer recommended.
+   * **Hindi Answer**: हम आटोमेटिक रूप से निपटानों को सिंक करते हैं: लंबित निपटान होने पर केवल अमाउंट अपडेट करते हैं, अनुपस्थित होने पर नया बनाते हैं, और अप्रासंगिक लंबित निपटानों को हटा देते हैं।
+
+5. **Question**: What validation is applied to settlement amounts?
+   * **Answer**: The amount must be greater than zero. Negative or zero values are rejected during form/clean validation.
+   * **Hindi Answer**: निपटान राशि शून्य से अधिक होनी चाहिए। नकारात्मक या शून्य मानों को फॉर्म क्लीन वैलिडेशन में रिजेक्ट कर दिया जाता है।
+
+6. **Question**: Why is a completed settlement immutable?
+   * **Answer**: Once paid and confirmed, altering it would disrupt the mathematical balance calculation history, creating database discrepancies.
+   * **Hindi Answer**: एक बार भुगतान होने और पुष्टि हो जाने पर, इसे बदलने से शेष राशि की गणना का इतिहास बिगड़ जाएगा और डेटा में गड़बड़ी होगी।
+
+7. **Question**: How do we restrict access so users only see their own group's settlements?
+   * **Answer**: We query the group using `get_object_or_404(Group, pk=group_pk, created_by=request.user)`. This raises a 404 if the group doesn't belong to the logged-in user.
+   * **Hindi Answer**: हम `get_object_or_404(Group, pk=group_pk, created_by=request.user)` का उपयोग करके ग्रुप फ़ेच करते हैं। यदि ग्रुप यूज़र का नहीं है, तो 404 एरर आता है।
+
+8. **Question**: What are the choices for the settlement status field?
+   * **Answer**: `'pending'` (Pending) and `'completed'` (Completed).
+   * **Hindi Answer**: `'pending'` (लंबित) और `'completed'` (पूर्ण)।
+
+9. **Question**: How do we filter settlements in `settlement_list_view`?
+   * **Answer**: By retrieving the `status` parameter from the GET request (`request.GET.get('status', 'all')`) and filtering the QuerySet accordingly.
+   * **Hindi Answer**: गेट (GET) अनुरोध से `status` पैरामीटर प्राप्त करके (`request.GET.get('status', 'all')`) और तदनुसार QuerySet को फ़िल्टर करके।
+
+10. **Question**: What happens to a member's balance when they send a completed settlement?
+    * **Answer**: Their Net Balance increases (becomes less negative or more positive) because they have cleared some of their debt.
+    * **Hindi Answer**: उनका शुद्ध शेष (Net Balance) बढ़ जाता है (कम ऋणात्मक या अधिक धनात्मक हो जाता है) क्योंकि उन्होंने अपना कुछ कर्ज चुका दिया है।
+
+11. **Question**: How does the greedy algorithm pair debtors and creditors?
+    * **Answer**: It pairs the debtor with the largest debt against the creditor with the largest receivable.
+    * **Hindi Answer**: यह सबसे बड़े कर्जदार का मिलान सबसे बड़े लेनदार के साथ करता है।
+
+12. **Question**: Why did you override the `clean()` method in `SettlementForm`?
+    * **Answer**: To perform multi-field validation, specifically checking that the payer and payee are not the same, and ensuring no identical settlement duplicate exists in the database.
+    * **Hindi Answer**: बहु-फ़ील्ड सत्यापन (multi-field validation) करने के लिए, विशेष रूप से यह जांचने के लिए कि भुगतानकर्ता और प्राप्तकर्ता समान न हों, और डेटाबेस में कोई डुप्लीकेट मौजूद न हो।
+
+13. **Question**: What is the difference between "Total Owes" and "Net Balance"?
+    * **Answer**: "Total Owes" is the gross sum of expense splits a member is responsible for. "Net Balance" is the net position (Paid minus Owes) determining if they pay or receive money.
+    * **Hindi Answer**: "Total Owes" खर्चों के उन हिस्सों का कुल योग है जिसके लिए सदस्य जिम्मेदार है। "Net Balance" कुल भुगतान में से बकाया घटाकर निकाली गई वास्तविक स्थिति है।
+
+14. **Question**: What decorator ensures only authenticated users access the settlement dashboard?
+    * **Answer**: Django's `@login_required` decorator.
+    * **Hindi Answer**: Django का `@login_required` डेकोरेटर।
+
+15. **Question**: How did you link the balance dashboard to the expense list?
+    * **Answer**: We added a glassmorphic anchor tag in `expense_list.html` linking to `{% url 'balance_dashboard' group.pk %}`.
+    * **Hindi Answer**: हमने `expense_list.html` में `{% url 'balance_dashboard' group.pk %}` पर जाने वाला एक नेविगेशन लिंक बटन जोड़ा।

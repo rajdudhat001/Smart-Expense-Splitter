@@ -20,11 +20,21 @@ class ModelTests(TestCase):
         )
         self.group.members.add(self.user1, self.user2, self.user3)
 
-        # Create a member for paid_by checks
+        # Create members for paid_by checks and splits
         self.member1 = Member.objects.create(
             group=self.group,
             name='Alice Member',
             email='alice@example.com'
+        )
+        self.member2 = Member.objects.create(
+            group=self.group,
+            name='Bob Member',
+            email='bob@example.com'
+        )
+        self.member3 = Member.objects.create(
+            group=self.group,
+            name='Charlie Member',
+            email='charlie@example.com'
         )
 
     def test_group_creation(self):
@@ -57,31 +67,31 @@ class ModelTests(TestCase):
             created_by=self.user1
         )
         # Create splits
-        split1 = ExpenseSplit.objects.create(expense=expense, user=self.user1, amount=30.00)
-        split2 = ExpenseSplit.objects.create(expense=expense, user=self.user2, amount=30.00)
-        split3 = ExpenseSplit.objects.create(expense=expense, user=self.user3, amount=30.00)
+        split1 = ExpenseSplit.objects.create(expense=expense, member=self.member1, amount=30.00)
+        split2 = ExpenseSplit.objects.create(expense=expense, member=self.member2, amount=30.00)
+        split3 = ExpenseSplit.objects.create(expense=expense, member=self.member3, amount=30.00)
 
         self.assertEqual(expense.splits.count(), 3)
         self.assertEqual(split1.amount, 30.00)
-        self.assertEqual(str(split1), "alice owes 30.00 for Dinner bill")
+        self.assertEqual(str(split1), "Alice Member owes 30.00 for Dinner bill")
 
-        # Test unique_together constraint on (expense, user)
+        # Test unique_together constraint on (expense, member)
         with self.assertRaises(IntegrityError):
-            ExpenseSplit.objects.create(expense=expense, user=self.user1, amount=10.00)
+            ExpenseSplit.objects.create(expense=expense, member=self.member1, amount=10.00)
 
     def test_settlement(self):
         settlement = Settlement.objects.create(
             group=self.group,
-            payer=self.user2,
-            payee=self.user1,
+            payer=self.member2,
+            payee=self.member1,
             amount=30.00,
             status='completed'
         )
-        self.assertEqual(settlement.payer, self.user2)
-        self.assertEqual(settlement.payee, self.user1)
+        self.assertEqual(settlement.payer, self.member2)
+        self.assertEqual(settlement.payee, self.member1)
         self.assertEqual(settlement.amount, 30.00)
         self.assertEqual(settlement.status, 'completed')
-        self.assertEqual(str(settlement), "bob paid alice 30.00 in Trip to Goa")
+        self.assertEqual(str(settlement), "Bob Member paid Alice Member 30.00 in Trip to Goa")
 
     def test_budget_creation(self):
         # Create group budget
@@ -635,6 +645,331 @@ class ExpenseCRUDTests(TestCase):
         response = self.client.post(self.delete_url)
         self.assertRedirects(response, self.list_url)
         self.assertFalse(Expense.objects.filter(pk=self.expense.pk).exists())
+
+
+class ExpenseSplitTests(TestCase):
+    def setUp(self):
+        # Create test users
+        self.owner = User.objects.create_user(username='owner', email='owner@example.com', password='password123')
+        self.user1 = User.objects.create_user(username='user1', email='user1@example.com', password='password123')
+        self.user2 = User.objects.create_user(username='user2', email='user2@example.com', password='password123')
+        self.other_user = User.objects.create_user(username='other', email='other@example.com', password='password123')
+
+        # Create group and add owner, user1, user2 to members
+        self.group = Group.objects.create(name='Goa Trip', description='Fun trip', created_by=self.owner)
+        self.group.members.add(self.owner, self.user1, self.user2)
+
+        # Create group members (fetched from selected group's Member model)
+        self.member_owner = Member.objects.create(group=self.group, name='Owner Member', email='owner@example.com')
+        self.member_user1 = Member.objects.create(group=self.group, name='User1 Member', email='user1@example.com')
+        self.member_user2 = Member.objects.create(group=self.group, name='User2 Member', email='user2@example.com')
+
+        # Create expense
+        self.expense = Expense.objects.create(
+            group=self.group,
+            title='Beach Dinner',
+            amount=100.00,
+            paid_by=self.member_owner,
+            date=date.today(),
+            category='Food',
+            created_by=self.owner
+        )
+
+        # URLs
+        self.split_url = reverse('expense_split', kwargs={'group_pk': self.group.pk, 'expense_pk': self.expense.pk})
+        self.equal_preview_url = reverse('equal_split_preview', kwargs={'group_pk': self.group.pk, 'expense_pk': self.expense.pk})
+        self.unequal_form_url = reverse('unequal_split_form', kwargs={'group_pk': self.group.pk, 'expense_pk': self.expense.pk})
+        self.result_url = reverse('split_result', kwargs={'group_pk': self.group.pk, 'expense_pk': self.expense.pk})
+
+    def test_expense_split_requires_authentication(self):
+        """Verify only logged in users can view the split setup page."""
+        response = self.client.get(self.split_url)
+        self.assertEqual(response.status_code, 302)  # Should redirect to login
+
+    def test_expense_split_restricted_to_group_creator(self):
+        """Verify other users cannot access split pages for groups they don't own."""
+        self.client.login(username='other', password='password123')
+        response = self.client.get(self.split_url)
+        self.assertEqual(response.status_code, 404)  # Restricted
+
+    def test_split_setup_view_loads_members(self):
+        """Verify the setup page displays all group members with checkboxes."""
+        self.client.login(username='owner', password='password123')
+        response = self.client.get(self.split_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Owner Member')
+        self.assertContains(response, 'User1 Member')
+        self.assertContains(response, 'User2 Member')
+
+    def test_split_setup_post_validation(self):
+        """Verify selecting no members throws an error."""
+        self.client.login(username='owner', password='password123')
+        payload = {
+            'selected_members': [],
+            'split_method': 'equal'
+        }
+        response = self.client.post(self.split_url, data=payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Please select at least one member to split.")
+
+    def test_equal_split_preview_calculation_and_rounding(self):
+        """Verify equal split correctly rounds and distributes remainder cents."""
+        self.client.login(username='owner', password='password123')
+        
+        # Select all 3 members (100.00 / 3 = 33.33 with 0.01 remainder)
+        payload = {
+            'selected_members': [self.member_owner.id, self.member_user1.id, self.member_user2.id],
+            'split_method': 'equal'
+        }
+        response = self.client.post(self.split_url, data=payload)
+        self.assertRedirects(response, self.equal_preview_url)
+
+        # Get preview page
+        preview_response = self.client.get(self.equal_preview_url)
+        self.assertEqual(preview_response.status_code, 200)
+        
+        # Check calculated preview shares in context
+        splits_preview = preview_response.context['splits']
+        self.assertEqual(len(splits_preview), 3)
+        
+        # Rounding logic test: One member should get 33.34, others 33.33
+        amounts = [float(item['amount']) for item in splits_preview]
+        self.assertIn(33.34, amounts)
+        self.assertEqual(amounts.count(33.33), 2)
+        self.assertEqual(sum(amounts), 100.00)
+
+        # Confirm splits save
+        confirm_response = self.client.post(self.equal_preview_url)
+        self.assertRedirects(confirm_response, self.result_url)
+
+        # Verify splits saved in DB
+        db_splits = ExpenseSplit.objects.filter(expense=self.expense)
+        self.assertEqual(db_splits.count(), 3)
+        self.assertEqual(sum(float(s.amount) for s in db_splits), 100.00)
+
+    def test_unequal_split_validation_and_saving(self):
+        """Verify custom split amount inputs are validated properly."""
+        self.client.login(username='owner', password='password123')
+        
+        # Go to setup page and select owner and user1 members
+        payload = {
+            'selected_members': [self.member_owner.id, self.member_user1.id],
+            'split_method': 'unequal'
+        }
+        response = self.client.post(self.split_url, data=payload)
+        self.assertRedirects(response, self.unequal_form_url)
+
+        # 1. Invalid unequal split (amounts do not sum to total expense)
+        post_payload = {
+            f'amount_{self.member_owner.id}': '40.00',
+            f'amount_{self.member_user1.id}': '50.00',  # Sums to 90, expected 100
+        }
+        err_response = self.client.post(self.unequal_form_url, data=post_payload)
+        self.assertEqual(err_response.status_code, 200)
+        self.assertContains(err_response, "must exactly equal the total expense amount")
+
+        # 2. Invalid unequal split (negative value)
+        post_payload = {
+            f'amount_{self.member_owner.id}': '-10.00',
+            f'amount_{self.member_user1.id}': '110.00',
+        }
+        err_response = self.client.post(self.unequal_form_url, data=post_payload)
+        self.assertEqual(err_response.status_code, 200)
+        self.assertContains(err_response, "Split amounts cannot be negative.")
+
+        # 3. Valid unequal split (sums to 100)
+        post_payload = {
+            f'amount_{self.member_owner.id}': '35.50',
+            f'amount_{self.member_user1.id}': '64.50',
+        }
+        success_response = self.client.post(self.unequal_form_url, data=post_payload)
+        self.assertRedirects(success_response, self.result_url)
+
+        # Verify splits saved: selected members get values, unselected get 0.00
+        db_splits = ExpenseSplit.objects.filter(expense=self.expense)
+        self.assertEqual(db_splits.count(), 3)  # Owner, user1, and user2 members
+        
+        owner_split = db_splits.get(member=self.member_owner)
+        user1_split = db_splits.get(member=self.member_user1)
+        user2_split = db_splits.get(member=self.member_user2)
+
+        self.assertEqual(float(owner_split.amount), 35.50)
+        self.assertEqual(float(user1_split.amount), 64.50)
+        self.assertEqual(float(user2_split.amount), 0.00)
+
+    def test_recalculate_splits_deletes_old_records(self):
+        """Verify that running split again overwrites any existing split records."""
+        self.client.login(username='owner', password='password123')
+        
+        # Save first split (Equal Split: owner = 50.00, user1 = 50.00, user2 = 0.00)
+        ExpenseSplit.objects.create(expense=self.expense, member=self.member_owner, amount=50.00)
+        ExpenseSplit.objects.create(expense=self.expense, member=self.member_user1, amount=50.00)
+        ExpenseSplit.objects.create(expense=self.expense, member=self.member_user2, amount=0.00)
+
+        self.assertEqual(ExpenseSplit.objects.filter(expense=self.expense).count(), 3)
+
+        # Run Equal Split again with all 3 members (distributes 100.00 among 3)
+        self.client.post(self.split_url, data={
+            'selected_members': [self.member_owner.id, self.member_user1.id, self.member_user2.id],
+            'split_method': 'equal'
+        })
+        self.client.post(self.equal_preview_url)
+
+        # Verify old 50.00 records are gone and replaced by the rounded equal division
+        db_splits = ExpenseSplit.objects.filter(expense=self.expense)
+        self.assertEqual(db_splits.count(), 3)
+        amounts = [float(s.amount) for s in db_splits]
+        self.assertNotIn(50.00, amounts)
+        self.assertIn(33.34, amounts)
+        self.assertEqual(sum(amounts), 100.00)
+
+
+class SettlementAndBalanceTests(TestCase):
+    def setUp(self):
+        # Create user and group
+        self.owner = User.objects.create_user(username='owner', password='password123')
+        self.other_user = User.objects.create_user(username='other', password='password123')
+        
+        self.group = Group.objects.create(name='Trip Group', created_by=self.owner)
+        self.group.members.add(self.owner)
+        
+        # Create members
+        self.member_raj = Member.objects.create(group=self.group, name='Raj')
+        self.member_netra = Member.objects.create(group=self.group, name='Netra')
+        self.member_rohan = Member.objects.create(group=self.group, name='Rohan')
+
+    def test_recalculate_group_settlements_correctness(self):
+        from decimal import Decimal
+        # Expense: 3000 paid by Raj, split equally between Raj, Netra, Rohan (1000 each)
+        expense = Expense.objects.create(
+            group=self.group,
+            title='Dinner',
+            amount=Decimal('3000.00'),
+            paid_by=self.member_raj,
+            date='2026-07-05',
+            category='Food',
+            created_by=self.owner
+        )
+        ExpenseSplit.objects.create(expense=expense, member=self.member_raj, amount=Decimal('1000.00'))
+        ExpenseSplit.objects.create(expense=expense, member=self.member_netra, amount=Decimal('1000.00'))
+        ExpenseSplit.objects.create(expense=expense, member=self.member_rohan, amount=Decimal('1000.00'))
+        
+        # Recalculate
+        from .views import recalculate_group_settlements
+        balances = recalculate_group_settlements(self.group)
+        
+        # Verify balances
+        raj_bal = next(b for b in balances if b['member'].id == self.member_raj.id)
+        netra_bal = next(b for b in balances if b['member'].id == self.member_netra.id)
+        rohan_bal = next(b for b in balances if b['member'].id == self.member_rohan.id)
+        
+        self.assertEqual(raj_bal['net_balance'], Decimal('2000.00'))
+        self.assertEqual(netra_bal['net_balance'], Decimal('-1000.00'))
+        self.assertEqual(rohan_bal['net_balance'], Decimal('-1000.00'))
+        
+        # Verify pending settlements auto-created
+        pending = Settlement.objects.filter(group=self.group, status='pending')
+        self.assertEqual(pending.count(), 2)
+        
+        # Settle Netra's debt: mark the settlement as completed
+        settlement = pending.filter(payer=self.member_netra).first()
+        settlement.status = 'completed'
+        settlement.save()
+        
+        # Recalculate again
+        balances = recalculate_group_settlements(self.group)
+        raj_bal = next(b for b in balances if b['member'].id == self.member_raj.id)
+        netra_bal = next(b for b in balances if b['member'].id == self.member_netra.id)
+        rohan_bal = next(b for b in balances if b['member'].id == self.member_rohan.id)
+        
+        # Netra should now have 0 net balance
+        self.assertEqual(netra_bal['net_balance'], Decimal('0.00'))
+        # Raj should have 1000 left to receive
+        self.assertEqual(raj_bal['net_balance'], Decimal('1000.00'))
+        # Rohan still owes 1000
+        self.assertEqual(rohan_bal['net_balance'], Decimal('-1000.00'))
+        
+        # Verify only 1 pending settlement left (Rohan owes Raj 1000)
+        remaining_pending = Settlement.objects.filter(group=self.group, status='pending')
+        self.assertEqual(remaining_pending.count(), 1)
+        self.assertEqual(remaining_pending.first().payer, self.member_rohan)
+        self.assertEqual(remaining_pending.first().payee, self.member_raj)
+        self.assertEqual(remaining_pending.first().amount, Decimal('1000.00'))
+
+    def test_settlement_form_validation(self):
+        from .forms import SettlementForm
+        from decimal import Decimal
+        
+        # 1. Invalid amount <= 0
+        form = SettlementForm(data={
+            'payer': self.member_netra.id,
+            'payee': self.member_raj.id,
+            'amount': '0.00',
+            'status': 'pending'
+        }, group=self.group)
+        self.assertFalse(form.is_valid())
+        self.assertIn('amount', form.errors)
+        
+        # 2. Same payer and payee
+        form = SettlementForm(data={
+            'payer': self.member_raj.id,
+            'payee': self.member_raj.id,
+            'amount': '500.00',
+            'status': 'pending'
+        }, group=self.group)
+        self.assertFalse(form.is_valid())
+        self.assertIn('payee', form.errors)
+
+        # 3. Duplicate check
+        Settlement.objects.create(
+            group=self.group,
+            payer=self.member_netra,
+            payee=self.member_raj,
+            amount=Decimal('500.00'),
+            status='completed'
+        )
+        form = SettlementForm(data={
+            'payer': self.member_netra.id,
+            'payee': self.member_raj.id,
+            'amount': '500.00',
+            'status': 'completed'
+        }, group=self.group)
+        self.assertFalse(form.is_valid())
+
+    def test_views_access_controls(self):
+        from decimal import Decimal
+        # Create a pending settlement
+        settlement = Settlement.objects.create(
+            group=self.group,
+            payer=self.member_netra,
+            payee=self.member_raj,
+            amount=Decimal('1000.00'),
+            status='pending'
+        )
+        
+        # 1. Unauthenticated users are blocked
+        response = self.client.get(reverse('balance_dashboard', args=[self.group.id]))
+        self.assertEqual(response.status_code, 302)  # redirects to login
+        
+        # 2. Non-owners are blocked
+        self.client.login(username='other', password='password123')
+        response = self.client.get(reverse('balance_dashboard', args=[self.group.id]))
+        self.assertEqual(response.status_code, 404)
+        
+        # 3. Creator can access
+        self.client.login(username='owner', password='password123')
+        response = self.client.get(reverse('balance_dashboard', args=[self.group.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Raj')
+        
+        # 4. Completed settlement cannot be re-completed
+        settlement.status = 'completed'
+        settlement.save()
+        confirm_url = reverse('settlement_confirm', args=[self.group.id, settlement.id])
+        response = self.client.get(confirm_url)
+        # Should redirect to detail page with warning message
+        self.assertEqual(response.status_code, 302)
+
 
 
 
